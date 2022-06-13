@@ -73,11 +73,12 @@ def train_model(
 
     validation_images = []
     validation_labels = []
-    validation_set_size = len(validation_images)
 
     for batch in tf_validation_ds:
         validation_images.append(batch["image"])
         validation_labels.append(batch["label"])
+
+    validation_set_size = len(validation_images)
 
     def calculate_edit_distance(labels, predictions, vocabulary: Vocabulary):
         # Get a single batch and convert its labels to sparse tensors.
