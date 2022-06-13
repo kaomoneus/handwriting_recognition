@@ -209,14 +209,14 @@ def plot_predictions(model: keras.Model, dataset: Dataset, vocabulary: Vocabular
     pass
 
 
-def run_train(args):
+def run_train(text_path, img_root_path, initial_model_path, epochs, output_model):
     dataset, vocabulary = load_dataset(
-        str_values_file_path=args.text, img_dir=args.img,
+        str_values_file_path=text_path, img_dir=img_root_path,
         image_width=IMAGE_WIDTH, image_height=IMAGE_HEIGHT,
         max_word_len=32
     )
 
-    model = init_model(args.initial_model, vocabulary)
+    model = init_model(initial_model_path, vocabulary)
     model.summary()
 
     total_ds_len = len(dataset)
@@ -234,7 +234,8 @@ def run_train(args):
 
     plot_samples(train_dataset, vocabulary)
 
-    train_model(model, args.epochs, train_dataset, validate_dataset, vocabulary)
+    train_model(model, epochs, train_dataset, validate_dataset, vocabulary)
+    model.save(output_model)
 
     plot_predictions(model, test_dataset, vocabulary)
 
@@ -275,7 +276,13 @@ def main():
         args = parser.parse_args()
 
         if args.cmd == "train":
-            run_train(args)
+            run_train(
+                text_path=args.text,
+                img_root_path=args.img,
+                initial_model_path=args.initial_model,
+                output_model=args.output_path,
+                epochs=args.epochs
+            )
 
         return 0
 
