@@ -9,6 +9,7 @@ import logging
 import tqdm
 
 
+# TODO: use this handler instead of StreamHandler
 class TqdmLoggingHandler(logging.Handler):
     def __init__(self, level=logging.NOTSET):
         super().__init__(level)

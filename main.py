@@ -220,7 +220,7 @@ def run_train(args):
     model.summary()
 
     total_ds_len = len(dataset)
-    train_and_validate_ds_len = int(TRAIN_TEST_RATIO * len(total_ds_len))
+    train_and_validate_ds_len = int(TRAIN_TEST_RATIO * total_ds_len)
     train_ds_len = int(TRAIN_VALIDATE_RATIO * train_and_validate_ds_len)
 
     train_dataset = dataset[:train_ds_len]
