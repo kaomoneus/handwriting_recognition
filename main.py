@@ -22,17 +22,19 @@ IMAGE_WIDTH = 128
 IMAGE_HEIGHT = 32
 
 """
-Defines proportion of training and evaluation data
+Defines proportion of training and test data
 Training data includes:
-* training samples itself
-* test samples
-"""
-TRAIN_EVAL_RATIO = 0.8
-
-"""
-Defines proportion of training and test samples
+* training samples itself - samples we train model on
+* validate samples - samples we evaluate progress during training
+   passed as additional parameter into 'fit' method.
+Test data is used after training is finished.
 """
 TRAIN_TEST_RATIO = 0.8
+
+"""
+Defines proportion of training and validate samples (both part of samples we use for training)
+"""
+TRAIN_VALIDATE_RATIO = 0.8
 
 """
 Default number of train epochs
@@ -62,11 +64,11 @@ def init_model(model_path: str, vocabulary: Vocabulary) -> keras.Model:
 def train_model(
     model: keras.Model,
     epochs: int,
-    train_ds: Dataset, test_ds: Dataset,
+    train_ds: Dataset, validate_ds: Dataset,
     vocabulary: Vocabulary
 ):
     tf_train_ds = tf_dataset(train_ds, vocabulary, BATCH_SIZE)
-    tf_validation_ds = tf_dataset(test_ds, vocabulary, BATCH_SIZE)
+    tf_validation_ds = tf_dataset(validate_ds, vocabulary, BATCH_SIZE)
 
     validation_images = []
     validation_labels = []
@@ -212,18 +214,18 @@ def run_train(args):
     model = init_model(args.initial_model, vocabulary)
     model.summary()
 
-    train_and_test_ds_len = int(TRAIN_EVAL_RATIO * len(dataset))
-    train_ds_len = int(TRAIN_TEST_RATIO * train_and_test_ds_len)
+    train_and_validate_ds_len = int(TRAIN_TEST_RATIO * len(dataset))
+    train_ds_len = int(TRAIN_VALIDATE_RATIO * train_and_validate_ds_len)
 
     train_dataset = dataset[:train_ds_len]
-    test_dataset = dataset[train_ds_len:train_and_test_ds_len]
-    eval_dataset = dataset[train_and_test_ds_len:]
+    validate_dataset = dataset[train_ds_len:train_and_validate_ds_len]
+    test_dataset = dataset[train_and_validate_ds_len:]
 
     plot_samples(train_dataset, vocabulary)
 
-    train_model(model, args.epochs, train_dataset, test_dataset, vocabulary)
+    train_model(model, args.epochs, train_dataset, validate_dataset, vocabulary)
 
-    plot_predictions(model, eval_dataset, vocabulary)
+    plot_predictions(model, test_dataset, vocabulary)
 
 
 def main():

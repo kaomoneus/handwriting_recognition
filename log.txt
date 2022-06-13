@@ -88,3 +88,5 @@ To silence this warning, decorate the function with @tf.autograph.experimental.d
 2022-06-13 22:03:27,345 dataset_utils WARNING: Skipping: '/Users/stepan/drive/doc/projects/iam_database/words/r06/r06-022/r06-022-03-05.png
 2022-06-13 22:03:30,343 text_utils INFO: Maximum length: 21
 2022-06-13 22:03:30,344 text_utils INFO: Vocab size: 78
+2022-06-13 22:23:30,654 dataset_utils WARNING: Skipping word '-----------------------------------------------------', exceeds max length 32 characters.
+2022-06-13 22:23:41,805 dataset_utils WARNING: Skipping: '/Users/stepan/drive/doc/projects/iam_database/words/a01/a01-117/a01-117-05-02.png
