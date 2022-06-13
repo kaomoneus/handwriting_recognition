@@ -5,6 +5,7 @@ import os
 import keras
 import numpy as np
 from keras.saving.save import load_model
+from tqdm import tqdm
 
 from dataset_utils import Dataset, load_dataset, tf_dataset, extract_images_and_labels
 from model_utils import build_model, prediction_model
@@ -72,6 +73,7 @@ def train_model(
 
     validation_images = []
     validation_labels = []
+    validation_set_size = len(validation_images)
 
     for batch in tf_validation_ds:
         validation_images.append(batch["image"])
@@ -104,9 +106,12 @@ def train_model(
         def on_epoch_end(self, epoch, logs=None):
             edit_distances = []
 
-            for i in range(len(validation_images)):
+            for i in tqdm(range(validation_set_size), desc=f"Evaluating epoch #{epoch}"):
                 labels = validation_labels[i]
-                predictions = self.prediction_model.predict(validation_images[i])
+                predictions = self.prediction_model.predict(
+                    validation_images[i],
+                    verbose=0
+                )
                 edit_distances.append(calculate_edit_distance(labels, predictions, vocabulary).numpy())
 
             print(
@@ -214,12 +219,18 @@ def run_train(args):
     model = init_model(args.initial_model, vocabulary)
     model.summary()
 
-    train_and_validate_ds_len = int(TRAIN_TEST_RATIO * len(dataset))
+    total_ds_len = len(dataset)
+    train_and_validate_ds_len = int(TRAIN_TEST_RATIO * len(total_ds_len))
     train_ds_len = int(TRAIN_VALIDATE_RATIO * train_and_validate_ds_len)
 
     train_dataset = dataset[:train_ds_len]
     validate_dataset = dataset[train_ds_len:train_and_validate_ds_len]
     test_dataset = dataset[train_and_validate_ds_len:]
+
+    LOG.info(f"Total dataset size: {total_ds_len}")
+    LOG.info(f"    Train set size: {train_ds_len}")
+    LOG.info(f"    Validation set size: {train_and_validate_ds_len - train_ds_len}")
+    LOG.info(f"    Train set size: {total_ds_len}")
 
     plot_samples(train_dataset, vocabulary)
 
