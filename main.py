@@ -270,6 +270,7 @@ def main():
         train_cmd.add_argument(
             "-e", dest="epochs",
             default=TRAIN_EPOCHS_DEFAULT,
+            type=int,
             help="Number of train epochs."
         )
 
