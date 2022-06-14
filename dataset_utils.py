@@ -13,6 +13,11 @@ from tqdm import tqdm
 from image_utils import load_and_pad_image
 from text_utils import Vocabulary
 
+"""
+Training batch size
+"""
+BATCH_SIZE = 64
+
 IMG_NAME_IDX = 0
 VALUE_IDX = 8
 
@@ -23,15 +28,13 @@ LOG = logging.getLogger(__name__)
 class GroundTruthPathsItem:
     str_value: str
     img_path: str
-    img_width: int
-    img_height: int
 
 
 @dataclasses.dataclass
 class GroundTruthItem:
-    str_value: str
-    img_path: str
     img: np.ndarray
+    str_value: str = ""
+    img_path: str = None
 
 
 Dataset = List[GroundTruthItem]
@@ -62,7 +65,7 @@ def _get_img_locs_recursive(
 def _load_sample(gtp: GroundTruthPathsItem):
     return GroundTruthItem(
         str_value=gtp.str_value,
-        img=load_and_pad_image(gtp.img_path, (gtp.img_width, gtp.img_height)),
+        img=load_and_pad_image(gtp.img_path),
         img_path=gtp.img_path
     )
 
@@ -70,7 +73,6 @@ def _load_sample(gtp: GroundTruthPathsItem):
 def load_dataset(
     str_values_file_path: str,
     img_dir: str,
-    image_width: int, image_height: int,
     max_word_len: int
 ) -> Tuple[Dataset, Vocabulary]:
     """
@@ -81,8 +83,6 @@ def load_dataset(
     its contents during debug.
     :param str_values_file_path: path to ground truth values (IAM ASCII format)
     :param img_dir: root path to images directory.
-    :param image_height: desired image width
-    :param image_width: desired image height
     :param max_word_len: max allowed word length (restricted by network architecture)
     :return: Dataset instance (which is a list)
     """
@@ -115,9 +115,7 @@ def load_dataset(
                 # characters.update(str_value)
                 load_tasks.append(GroundTruthPathsItem(
                     str_value=str_value,
-                    img_path=img_path,
-                    img_width=image_width,
-                    img_height=image_height
+                    img_path=img_path
                 ))
 
             pool = Pool(processes=(cpu_count() * 4))
@@ -146,7 +144,7 @@ def extract_images_and_labels(ds: Dataset) -> Tuple[List[np.ndarray], List[str]]
     return images, labels
 
 
-def tf_dataset(ds: Dataset, vocabulary: Vocabulary, batch_size) -> tf.data.Dataset:
+def tf_dataset(ds: Dataset, vocabulary: Vocabulary) -> tf.data.Dataset:
     """
     Converts dataset to internal tensorflow representation
     :param ds:
@@ -164,4 +162,4 @@ def tf_dataset(ds: Dataset, vocabulary: Vocabulary, batch_size) -> tf.data.Datas
         (images, labels)
     ).map(_process_images_labels)
 
-    return tf_ds.batch(batch_size).prefetch(AUTOTUNE).cache()
+    return tf_ds.batch(BATCH_SIZE).prefetch(AUTOTUNE).cache()

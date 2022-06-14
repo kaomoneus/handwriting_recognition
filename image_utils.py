@@ -6,11 +6,20 @@ import numpy as np
 import tensorflow as tf
 
 LOG = logging.getLogger(__name__)
+
+"""
+Defines internal format of rendered strings.
+Note, if string is quite short for such aspect ration
+it is supposed to pad such rendered string image.
+"""
+IMAGE_WIDTH = 128
+IMAGE_HEIGHT = 32
+
 PAD_COLOR = 255
 
 
-def distortion_free_resize(image: numpy.ndarray, img_size):
-    w, h = img_size
+def distortion_free_resize(image: numpy.ndarray):
+    w, h = IMAGE_WIDTH, IMAGE_HEIGHT
     image = tf.image.resize(image, size=(h, w), preserve_aspect_ratio=True)
 
     # Check tha amount of padding needed to be done.
@@ -47,7 +56,7 @@ def distortion_free_resize(image: numpy.ndarray, img_size):
     return image
 
 
-def load_and_pad_image(image_path: str, img_size: Tuple[int, int]) -> Optional[np.ndarray]:
+def load_and_pad_image(image_path: str, roi: Tuple[int, int, int, int] = None) -> Optional[np.ndarray]:
     image = tf.io.read_file(image_path)
 
     try:
@@ -56,6 +65,10 @@ def load_and_pad_image(image_path: str, img_size: Tuple[int, int]) -> Optional[n
         LOG.warning(f"Unable to load '{image_path}': {e}")
         return None
 
-    image = distortion_free_resize(image, img_size)
+    if roi:
+        left, top, width, height = roi
+        image = tf.image.crop_to_bounding_box(image, top, left, height, width)
+
+    image = distortion_free_resize(image)
     image = tf.cast(image, tf.float32) / 255.0
     return image

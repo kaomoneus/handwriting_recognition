@@ -1,10 +1,17 @@
+import json
 import logging
+from typing import Dict, Any
+
 import tensorflow as tf
+from keras.layers import StringLookup
 
 LOG = logging.getLogger(__name__)
 PADDING_TOKEN = 99
 
 
+# TODO: combine it with Model
+#   instead "model" in context of our task is a combination of keras.Model + vocabulary.
+#   Thus it should be built together, load/save together
 class Vocabulary:
     def __init__(self):
         # Pay attention that "set" is mandatory to be transformed to sorted "list"
@@ -15,6 +22,15 @@ class Vocabulary:
         self.max_len = 0
         self.num_to_char = None
         self.char_to_num = None
+
+    def build_convertors(self):
+        # Mapping characters to integers.
+        self.char_to_num = StringLookup(vocabulary=list(self.characters), mask_token=None)
+
+        # Mapping integers back to original characters.
+        self.num_to_char = StringLookup(
+            vocabulary=self.char_to_num.get_vocabulary(), mask_token=None, invert=True
+        )
 
     class Loader:
         def __init__(self, subj):
@@ -27,19 +43,10 @@ class Vocabulary:
             return self
 
         def __exit__(self, exc_type, exc_val, exc_tb):
-            from keras.layers import StringLookup
 
             self.subj.characters = list(sorted(self.characters))
-
-            # Mapping characters to integers.
-            self.subj.char_to_num = StringLookup(vocabulary=list(self.subj.characters), mask_token=None)
-
-            # Mapping integers back to original characters.
-            self.subj.num_to_char = StringLookup(
-                vocabulary=self.subj.char_to_num.get_vocabulary(), mask_token=None, invert=True
-            )
-
             self.subj.max_len = self.max_len
+            self.subj.build_convertors()
 
             # FIXME: in original article max_len calculated only for train dataset.
             LOG.info(f"Maximum length: {self.max_len}")
@@ -58,3 +65,23 @@ class Vocabulary:
         pad_amount = self.max_len - length
         label = tf.pad(label, paddings=[[0, pad_amount]], constant_values=PADDING_TOKEN)
         return label
+
+    def save(self, path: str):
+        with open(path, "w") as f:
+            fields = dict(vars(self))
+            del fields["num_to_char"]
+            del fields["char_to_num"]
+            json.dump(fields, f, indent=4)
+
+
+def load_vocabulary(path: str) -> Vocabulary():
+    voc = Vocabulary()
+
+    with open(path, "r") as f:
+        fields: Dict[str, Any] = json.load(f)
+        for f_name, value in fields.items():
+            setattr(voc, f_name, value)
+
+    voc.build_convertors()
+
+    return voc

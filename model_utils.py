@@ -5,9 +5,14 @@ been padded accordingly.
 """
 from typing import Tuple
 
+import numpy as np
 import tensorflow as tf
+from keras.saving.save import load_model
 from tensorflow import keras
+from tqdm import tqdm
 
+from dataset_utils import Dataset, tf_dataset
+from image_utils import IMAGE_WIDTH, IMAGE_HEIGHT
 from text_utils import Vocabulary
 
 """
@@ -37,10 +42,10 @@ class CTCLayer(keras.layers.Layer):
         return y_pred
 
 
-def build_model(image_width: int, image_height: int, vocabulary: Vocabulary):
+def build_model(vocabulary: Vocabulary):
 
     # Inputs to the model
-    input_img = keras.Input(shape=(image_width, image_height, 1), name="image")
+    input_img = keras.Input(shape=(IMAGE_WIDTH, IMAGE_HEIGHT, 1), name="image")
     labels = keras.layers.Input(name="label", shape=(None,))
 
     # First conv block.
@@ -69,7 +74,7 @@ def build_model(image_width: int, image_height: int, vocabulary: Vocabulary):
     # Hence, downsampled feature maps are 4x smaller. The number of
     # filters in the last layer is 64. Reshape accordingly before
     # passing the output to the RNN part of the model.
-    new_shape = ((image_width // 4), (image_height // 4) * 64)
+    new_shape = ((IMAGE_WIDTH // 4), (IMAGE_HEIGHT // 4) * 64)
     x = keras.layers.Reshape(target_shape=new_shape, name="reshape")(x)
     x = keras.layers.Dense(64, activation="relu", name="dense1")(x)
     x = keras.layers.Dropout(0.2)(x)
@@ -106,3 +111,82 @@ def prediction_model(model: keras.Model):
     return keras.models.Model(
         model.get_layer(name="image").input, model.get_layer(name="dense2").output
     )
+
+
+def init_model(model_path: str, vocabulary: Vocabulary, image_width: int, image_height: int) -> keras.Model:
+    if not model_path:
+        return build_model(image_width, image_height, vocabulary)
+
+    return load_model(model_path)
+
+
+def train_model(
+    model: keras.Model,
+    epochs: int,
+    train_ds: Dataset, validate_ds: Dataset,
+    batch_size: int,
+    vocabulary: Vocabulary
+):
+    tf_train_ds = tf_dataset(train_ds, vocabulary, batch_size)
+    tf_validation_ds = tf_dataset(validate_ds, vocabulary, batch_size)
+
+    validation_images = []
+    validation_labels = []
+
+    for batch in tf_validation_ds:
+        validation_images.append(batch["image"])
+        validation_labels.append(batch["label"])
+
+    validation_set_size = len(validation_images)
+
+    def calculate_edit_distance(labels, predictions, vocabulary: Vocabulary):
+        # Get a single batch and convert its labels to sparse tensors.
+        saprse_labels = tf.cast(tf.sparse.from_dense(labels), dtype=tf.int64)
+
+        # Make predictions and convert them to sparse tensors.
+        input_len = np.ones(predictions.shape[0]) * predictions.shape[1]
+        predictions_decoded = tf.keras.backend.ctc_decode(
+            predictions, input_length=input_len, greedy=True
+        )[0][0][:, :vocabulary.max_len]
+        sparse_predictions = tf.cast(
+            tf.sparse.from_dense(predictions_decoded), dtype=tf.int64
+        )
+
+        # Compute individual edit distances and average them out.
+        edit_distances = tf.edit_distance(
+            sparse_predictions, saprse_labels, normalize=False
+        )
+        return tf.reduce_mean(edit_distances)
+
+    class EditDistanceCallback(keras.callbacks.Callback):
+        def __init__(self):
+            super().__init__()
+            self.prediction_model = prediction_model(model)
+
+        def on_epoch_end(self, epoch, logs=None):
+            edit_distances = []
+
+            for i in tqdm(range(validation_set_size), desc=f"Evaluating epoch #{epoch}"):
+                labels = validation_labels[i]
+                predictions = self.prediction_model.predict(
+                    validation_images[i],
+                    verbose=0
+                )
+                edit_distances.append(calculate_edit_distance(labels, predictions, vocabulary).numpy())
+
+            print(
+                f"Mean edit distance for epoch {epoch + 1}: {np.mean(edit_distances):.4f}"
+            )
+
+    edit_distance_callback = EditDistanceCallback()
+
+    # Train the model.
+    history = model.fit(
+        tf_train_ds,
+        validation_data=tf_validation_ds,
+        epochs=epochs,
+        callbacks=[edit_distance_callback],
+    )
+
+    return history
+
