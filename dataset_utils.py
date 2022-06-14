@@ -156,7 +156,7 @@ def tf_dataset(ds: Dataset, vocabulary: Vocabulary) -> tf.data.Dataset:
 
     def _process_images_labels(image, label):
         label = vocabulary.vectorize_label(label)
-        return {"image": image, "label": label}
+        return {"image": tf.convert_to_tensor(image, dtype=tf.float32), "label": label}
 
     tf_ds = tf.data.Dataset.from_tensor_slices(
         (images, labels)
