@@ -1,7 +1,7 @@
 import dataclasses
 import logging
 import os
-from multiprocessing import Pool
+from multiprocessing import Pool, cpu_count
 from os import listdir
 from typing import List, Dict, Tuple
 
@@ -120,7 +120,7 @@ def load_dataset(
                     img_height=image_height
                 ))
 
-            pool = Pool()
+            pool = Pool(processes=(cpu_count() * 4))
 
             for gt in tqdm(
                 pool.imap_unordered(_load_sample, load_tasks),

@@ -4,9 +4,10 @@ from typing import Tuple, Optional
 import numpy
 import numpy as np
 import tensorflow as tf
-from tensorboard.errors import PublicError
 
 LOG = logging.getLogger(__name__)
+PAD_COLOR = 255
+
 
 def distortion_free_resize(image: numpy.ndarray, img_size):
     w, h = img_size
@@ -38,6 +39,7 @@ def distortion_free_resize(image: numpy.ndarray, img_size):
             [pad_width_left, pad_width_right],
             [0, 0],
         ],
+        constant_values=PAD_COLOR
     )
 
     image = tf.transpose(image, perm=[1, 0, 2])
