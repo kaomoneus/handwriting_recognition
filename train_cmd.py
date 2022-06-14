@@ -3,6 +3,7 @@ import logging
 from pathlib import Path
 
 import numpy as np
+from keras.backend import clear_session
 from keras.saving.save import load_model
 import tensorflow as tf
 from tensorflow import keras
@@ -133,6 +134,7 @@ def train_model(
                     verbose=0
                 )
                 edit_distances.append(calculate_edit_distance(labels, predictions, vocabulary).numpy())
+                clear_session()
 
             print(
                 f"Mean edit distance for epoch {epoch + 1}: {np.mean(edit_distances):.4f}"
