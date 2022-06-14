@@ -4,6 +4,7 @@ from typing import Tuple, Optional
 import numpy
 import numpy as np
 import tensorflow as tf
+import cv2
 
 LOG = logging.getLogger(__name__)
 
@@ -18,13 +19,55 @@ IMAGE_HEIGHT = 32
 PAD_COLOR = 255
 
 
+def image_resize(image, width=None, height=None, inter=cv2.INTER_AREA):
+    """
+    Copyright to https://stackoverflow.com/a/44659589/5160481
+    """
+    # initialize the dimensions of the image to be resized and
+    # grab the image size
+    dim = None
+    (h, w) = image.shape[:2]
+
+    # if both the width and height are None, then return the
+    # original image
+    if width is None and height is None:
+        return image
+
+    # check to see if the width is None
+    if width is None:
+        # calculate the ratio of the height and construct the
+        # dimensions
+        r = height / float(h)
+        dim = (int(w * r), height)
+
+    # otherwise, the height is None
+    else:
+        # calculate the ratio of the width and construct the
+        # dimensions
+        rw = width / float(w)
+        rh = height / float(h)
+
+        dim = (width, int(h * rw)) if rw < rh else (int(w * rh), height)
+
+    # resize the image
+    resized = cv2.resize(image, dim, interpolation=inter)
+
+    # return the resized image
+    return resized
+
+
 def distortion_free_resize(image: numpy.ndarray):
     w, h = IMAGE_WIDTH, IMAGE_HEIGHT
-    image = tf.image.resize(image, size=(h, w), preserve_aspect_ratio=True)
+
+    # TODO: after resize in order to prevent corner-looking artifacts
+    #    perform some bluring and thresholding
+    image = image_resize(image, w, h, cv2.INTER_CUBIC)
+    if len(image.shape) == 2:
+        image = image.reshape([*image.shape, 1])
 
     # Check tha amount of padding needed to be done.
-    pad_height = h - tf.shape(image)[0]
-    pad_width = w - tf.shape(image)[1]
+    pad_height = h - image.shape[0]
+    pad_width = w - image.shape[1]
 
     # Only necessary if you want to do same amount of padding on both sides.
     if pad_height % 2 != 0:
@@ -41,9 +84,9 @@ def distortion_free_resize(image: numpy.ndarray):
     else:
         pad_width_left = pad_width_right = pad_width // 2
 
-    image = tf.pad(
+    image = np.pad(
         image,
-        paddings=[
+        pad_width=[
             [pad_height_top, pad_height_bottom],
             [pad_width_left, pad_width_right],
             [0, 0],
@@ -51,24 +94,41 @@ def distortion_free_resize(image: numpy.ndarray):
         constant_values=PAD_COLOR
     )
 
-    image = tf.transpose(image, perm=[1, 0, 2])
-    image = tf.image.flip_left_right(image)
+    # image = tf.transpose(image, perm=[1, 0, 2])
+    # image = tf.image.flip_left_right(image)
     return image
 
 
-def load_and_pad_image(image_path: str, roi: Tuple[int, int, int, int] = None) -> Optional[np.ndarray]:
-    image = tf.io.read_file(image_path)
-
+def load_and_pad_image(
+    image_path: str,
+    roi: Tuple[int, int, int, int] = None,
+    applyThreshold = False
+) -> Optional[np.ndarray]:
     try:
-        image = tf.image.decode_png(image, 1)
+        image: np.ndarray = cv2.imread(image_path)
     except Exception as e:
         LOG.warning(f"Unable to load '{image_path}': {e}")
         return None
 
+    if len(image.shape) == 2:
+        image = image.reshape([*image.shape, 1])
+    elif image.shape[2] != 1:
+        image: np.ndarray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        image = image.reshape([*image.shape, 1])
+
     if roi:
         left, top, width, height = roi
-        image = tf.image.crop_to_bounding_box(image, top, left, height, width)
+        image = image[top:top+height, left:left+width, :]
+
+    if applyThreshold:
+        # image = cv2.adaptiveThreshold(image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 3)
+        _, image = cv2.threshold(image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        image = image.reshape([*image.shape, 1])
 
     image = distortion_free_resize(image)
+
     image = tf.cast(image, tf.float32) / 255.0
+    image = tf.transpose(image, perm=[1, 0, 2])
+    image = tf.image.flip_left_right(image)
+
     return image
