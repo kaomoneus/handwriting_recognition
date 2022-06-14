@@ -106,6 +106,9 @@ def load_and_pad_image(
 ) -> Optional[np.ndarray]:
     try:
         image: np.ndarray = cv2.imread(image_path)
+        if image is None:
+            LOG.warning(f"Unable to load '{image_path}'")
+            return None
     except Exception as e:
         LOG.warning(f"Unable to load '{image_path}': {e}")
         return None
