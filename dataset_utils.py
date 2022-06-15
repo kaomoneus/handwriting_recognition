@@ -1,16 +1,14 @@
 import dataclasses
 import logging
 import os
-from multiprocessing import Pool, cpu_count
 from os import listdir
+from tempfile import TemporaryDirectory
 from typing import List, Dict, Tuple
 
-import numpy as np
 import tensorflow as tf
 from tensorflow.python.data import AUTOTUNE
-from tqdm import tqdm
 
-from image_utils import load_and_pad_image
+from image_utils import tf_distortion_free_resize
 from text_utils import Vocabulary
 
 """
@@ -30,14 +28,7 @@ class GroundTruthPathsItem:
     img_path: str
 
 
-@dataclasses.dataclass
-class GroundTruthItem:
-    img: np.ndarray
-    str_value: str = ""
-    img_path: str = None
-
-
-Dataset = List[GroundTruthItem]
+Dataset = List[GroundTruthPathsItem]
 
 
 def get_img_locs(img_dir: str) -> Dict[str, str]:
@@ -62,14 +53,6 @@ def _get_img_locs_recursive(
     return res
 
 
-def _load_sample(gtp: GroundTruthPathsItem):
-    return GroundTruthItem(
-        str_value=gtp.str_value,
-        img=load_and_pad_image(gtp.img_path),
-        img_path=gtp.img_path
-    )
-
-
 def load_dataset(
     str_values_file_path: str,
     img_dir: str,
@@ -86,10 +69,20 @@ def load_dataset(
     :param max_word_len: max allowed word length (restricted by network architecture)
     :return: Dataset instance (which is a list)
     """
-    res = []
+    res: Dataset = []
     vocabulary = Vocabulary()
 
     locs = get_img_locs(img_dir)
+
+    # TODO: preprocess image and same them in tmp directory.
+    #   We can't preprocess them in tf_distortion_free_resize
+    #   just because tf function is very special
+    #   it uses only TF calls it thus might be converted into
+    #   internal TF graphs.
+    # with TemporaryDirectory() as tmp:
+    #     # Run required preprocessing:
+    #     #    different sorts of degradation etc.
+    #     pass
 
     with open(str_values_file_path, "r") as f:
         with vocabulary.loader() as characters:
@@ -103,45 +96,40 @@ def load_dataset(
                 l_items = line.split(" ")
                 str_value = l_items[VALUE_IDX].strip().replace("|", " ")
 
-                if len(str_value) > max_word_len:
-                    LOG.warning(f"Skipping word '{str_value}', exceeds max length {max_word_len} characters.")
-                    continue
-
                 img_name = l_items[IMG_NAME_IDX]
                 img_path = locs[img_name]
+
+                skip_msg = f"Skipping word '{str_value}', rendered as '{img_path}': %s"
+
+                if len(str_value) > max_word_len:
+                    LOG.warning(skip_msg % "exceeds max length {max_word_len} characters.")
+                    continue
+
+                if os.path.getsize(img_path) == 0:
+                    LOG.warning(skip_msg % "image is empty")
+                    continue
 
                 characters.update(str_value)
 
                 # characters.update(str_value)
-                load_tasks.append(GroundTruthPathsItem(
+                res.append(GroundTruthPathsItem(
                     str_value=str_value,
                     img_path=img_path
                 ))
 
-            pool = Pool(processes=(cpu_count() * 4))
-
-            for gt in tqdm(
-                pool.imap_unordered(_load_sample, load_tasks),
-                total=len(load_tasks),
-                desc="Loading rendered text"
-            ):
-                if gt.img is None:
-                    LOG.warning(f"Skipping: '{gt.img_path}")
-                    continue
-                res.append(gt)
 
     return res, vocabulary
 
 
-def extract_images_and_labels(ds: Dataset) -> Tuple[List[np.ndarray], List[str]]:
-    images = []
+def extract_images_and_labels(ds: Dataset) -> Tuple[List[str], List[str]]:
+    paths = []
     labels = []
 
     for gt in ds:
         labels.append(gt.str_value)
-        images.append(gt.img)
+        paths.append(gt.img_path)
 
-    return images, labels
+    return paths, labels
 
 
 def tf_dataset(ds: Dataset, vocabulary: Vocabulary) -> tf.data.Dataset:
@@ -152,14 +140,20 @@ def tf_dataset(ds: Dataset, vocabulary: Vocabulary) -> tf.data.Dataset:
     :return: tf.Data.Dataset instance
     """
 
-    images, labels = extract_images_and_labels(ds)
+    paths, labels = extract_images_and_labels(ds)
 
-    def _process_images_labels(image, label):
+    def _process_images_labels(img_path, label):
         label = vocabulary.vectorize_label(label)
-        return {"image": tf.convert_to_tensor(image, dtype=tf.float32), "label": label}
+
+        img_bytes = tf.io.read_file(img_path)
+        image = tf.image.decode_png(img_bytes, 1)
+        image = tf_distortion_free_resize(image)
+        image = tf.cast(image, tf.float32) / 255.0
+
+        return {"image": image, "label": label}
 
     tf_ds = tf.data.Dataset.from_tensor_slices(
-        (images, labels)
-    ).map(_process_images_labels)
+        (paths, labels)
+    ).map(_process_images_labels, num_parallel_calls=AUTOTUNE)
 
     return tf_ds.batch(BATCH_SIZE).prefetch(AUTOTUNE).cache()

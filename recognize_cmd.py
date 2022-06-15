@@ -4,12 +4,10 @@ from typing import Tuple
 
 from keras.saving.save import load_model
 
-from dataset_utils import GroundTruthItem, tf_dataset
-from image_utils import load_and_pad_image
-from model_utils import prediction_model
+from dataset_utils import GroundTruthPathsItem
 from plot_utils import plot_predictions
 from text_utils import load_vocabulary
-import cv2
+
 
 def register_recognize_args(recognize_cmd: argparse.ArgumentParser):
     recognize_cmd.add_argument("-img", help="Path to image to be recognized", required=True)
@@ -33,9 +31,9 @@ def handle_recognize_cmd(args: argparse.Namespace):
 
 def run_recognize(img_path: str, model_path: str, roi: Tuple[int, int, int, int]):
 
-    ds = [GroundTruthItem(
+    ds = [GroundTruthPathsItem(
         str_value="",
-        img=load_and_pad_image(image_path=img_path, roi=roi, applyThreshold=True)
+        img_path=img_path
     )]
 
     vocabulary = load_vocabulary(str(Path(model_path).with_suffix(".voc")))
