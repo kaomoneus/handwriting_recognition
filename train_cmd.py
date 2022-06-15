@@ -22,12 +22,12 @@ Training data includes:
    passed as additional parameter into 'fit' method.
 Test data is used after training is finished.
 """
-TRAIN_TEST_RATIO = 0.8
+TRAIN_TEST_RATIO = 0.9
 
 """
 Defines proportion of training and validate samples (both part of samples we use for training)
 """
-TRAIN_VALIDATE_RATIO = 0.8
+TRAIN_VALIDATE_RATIO = 0.95
 
 """
 Default number of train epochs
@@ -89,6 +89,10 @@ def train_model(
     vocabulary: Vocabulary
 ):
     tf_train_ds = tf_dataset(train_ds, vocabulary)
+    # FIXME: shuffle train dataset
+    #    BUT don't shuffle test and validation
+    #    NN should never train on those sets
+
     tf_validation_ds = tf_dataset(validate_ds, vocabulary)
 
     validation_images = []
@@ -127,6 +131,7 @@ def train_model(
         def on_epoch_end(self, epoch, logs=None):
             edit_distances = []
 
+            # FIXME: Evaluation is slow, may be because of 'tqdm' I don't know...
             for i in tqdm(range(validation_set_size), desc=f"Evaluating epoch #{epoch}"):
                 labels = validation_labels[i]
                 predictions = self.prediction_model.predict(
