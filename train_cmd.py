@@ -179,7 +179,7 @@ def run_train(text_path, img_root_path, initial_model_path, epochs, output_model
     LOG.info(f"Total dataset size: {total_ds_len}")
     LOG.info(f"    Train set size: {train_ds_len}")
     LOG.info(f"    Validation set size: {train_and_validate_ds_len - train_ds_len}")
-    LOG.info(f"    Train set size: {total_ds_len}")
+    LOG.info(f"    Test set size: {total_ds_len - train_and_validate_ds_len}")
 
     plot_samples(train_dataset, vocabulary)
 
