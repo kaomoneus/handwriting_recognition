@@ -77,6 +77,8 @@ def load_dataset(
     locs = get_img_locs(img_dir)
 
     # TODO: preprocess image and same them in tmp directory.
+    #   This is IMPORTANT. Currently network shows perfect results
+    #   on IAM, but very poor results otherwise.
     #   We can't preprocess them in tf_distortion_free_resize
     #   just because tf function is very special
     #   it uses only TF calls it thus might be converted into

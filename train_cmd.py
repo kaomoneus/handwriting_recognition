@@ -89,9 +89,6 @@ def train_model(
     vocabulary: Vocabulary
 ):
     tf_train_ds = tf_dataset(train_ds, vocabulary)
-    # FIXME: shuffle train dataset
-    #    BUT don't shuffle test and validation
-    #    NN should never train on those sets
 
     tf_validation_ds = tf_dataset(validate_ds, vocabulary)
 
