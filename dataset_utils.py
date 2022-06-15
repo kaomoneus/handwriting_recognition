@@ -160,4 +160,4 @@ def tf_dataset(ds: Dataset, vocabulary: Vocabulary) -> tf.data.Dataset:
         (paths, labels, rois)
     ).map(_process_images_labels, num_parallel_calls=AUTOTUNE)
 
-    return tf_ds.batch(BATCH_SIZE).prefetch(AUTOTUNE).cache()
+    return tf_ds.batch(BATCH_SIZE).prefetch(AUTOTUNE).cache().shuffle(len(ds))
