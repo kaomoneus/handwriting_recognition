@@ -4,7 +4,7 @@ from typing import Tuple
 
 from keras.saving.save import load_model
 
-from dataset_utils import GroundTruthPathsItem
+from dataset_utils import GroundTruthPathsItem, ROI
 from plot_utils import plot_predictions
 from text_utils import load_vocabulary
 
@@ -29,11 +29,12 @@ def handle_recognize_cmd(args: argparse.Namespace):
     )
 
 
-def run_recognize(img_path: str, model_path: str, roi: Tuple[int, int, int, int]):
+def run_recognize(img_path: str, model_path: str, roi: ROI):
 
     ds = [GroundTruthPathsItem(
         str_value="",
-        img_path=img_path
+        img_path=img_path,
+        roi=roi
     )]
 
     vocabulary = load_vocabulary(str(Path(model_path).with_suffix(".voc")))

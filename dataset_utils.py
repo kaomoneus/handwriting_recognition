@@ -2,7 +2,6 @@ import dataclasses
 import logging
 import os
 from os import listdir
-from tempfile import TemporaryDirectory
 from typing import List, Dict, Tuple
 
 import tensorflow as tf
@@ -21,11 +20,14 @@ VALUE_IDX = 8
 
 LOG = logging.getLogger(__name__)
 
+ROI = Tuple[int, int, int, int]
+
 
 @dataclasses.dataclass
 class GroundTruthPathsItem:
     str_value: str
     img_path: str
+    roi: ROI = None
 
 
 Dataset = List[GroundTruthPathsItem]
@@ -90,8 +92,6 @@ def load_dataset(
             lines = [ll for ll in f.readlines() if not ll.startswith("#")]
             LOG.debug(f"Total lines/sentences read: {len(lines)}")
 
-            load_tasks = []
-
             for line in lines:
                 l_items = line.split(" ")
                 str_value = l_items[VALUE_IDX].strip().replace("|", " ")
@@ -117,43 +117,47 @@ def load_dataset(
                     img_path=img_path
                 ))
 
-
     return res, vocabulary
 
 
-def extract_images_and_labels(ds: Dataset) -> Tuple[List[str], List[str]]:
+def extract_images_and_labels(ds: Dataset) -> Tuple[List[str], List[str], List[ROI]]:
     paths = []
     labels = []
+    rois = []
 
     for gt in ds:
         labels.append(gt.str_value)
         paths.append(gt.img_path)
+        rois.append(gt.roi)
 
-    return paths, labels
+    return paths, labels, rois
 
 
 def tf_dataset(ds: Dataset, vocabulary: Vocabulary) -> tf.data.Dataset:
     """
     Converts dataset to internal tensorflow representation
     :param ds:
-    :param image_size: size of image in format <width, height>
+    :param vocabulary: is used to vectorize labels properly
     :return: tf.Data.Dataset instance
     """
 
-    paths, labels = extract_images_and_labels(ds)
+    paths, labels, rois = extract_images_and_labels(ds)
 
-    def _process_images_labels(img_path, label):
+    def _process_images_labels(img_path, label, roi):
         label = vocabulary.vectorize_label(label)
 
         img_bytes = tf.io.read_file(img_path)
         image = tf.image.decode_png(img_bytes, 1)
+        if roi is not None:
+            image = tf.image.crop_to_bounding_box(image, roi[1], roi[0], roi[3], roi[2])
+
         image = tf_distortion_free_resize(image)
         image = tf.cast(image, tf.float32) / 255.0
 
         return {"image": image, "label": label}
 
     tf_ds = tf.data.Dataset.from_tensor_slices(
-        (paths, labels)
+        (paths, labels, rois)
     ).map(_process_images_labels, num_parallel_calls=AUTOTUNE)
 
     return tf_ds.batch(BATCH_SIZE).prefetch(AUTOTUNE).cache()
