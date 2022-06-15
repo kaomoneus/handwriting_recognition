@@ -178,6 +178,9 @@ def run_train(text_path, img_root_path, initial_model_path, epochs, output_model
     LOG.info(f"    Validation set size: {train_and_validate_ds_len - train_ds_len}")
     LOG.info(f"    Test set size: {total_ds_len - train_and_validate_ds_len}")
 
+    # TODO: print random validate file paths
+    # TODO: print random test file paths
+
     plot_samples(train_dataset, vocabulary)
 
     train_model(model, epochs, train_dataset, validate_dataset, vocabulary)
