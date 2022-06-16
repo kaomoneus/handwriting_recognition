@@ -13,15 +13,11 @@ import tensorflow as tf
 from tensorflow.python.data import AUTOTUNE
 from tqdm import tqdm
 
+from config import BATCH_SIZE
 from image_utils import tf_distortion_free_resize, load_and_pad_image, augment_image, distortion_free_resize
 from text_utils import Vocabulary
 
 GROUND_TRUTH_FILENAME = "ground_truth.txt"
-
-"""
-Training batch size
-"""
-BATCH_SIZE = 64
 
 IMG_NAME_IDX = 0
 VALUE_IDX = 8

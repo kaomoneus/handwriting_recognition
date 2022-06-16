@@ -10,31 +10,11 @@ import tensorflow as tf
 from tensorflow import keras
 from tqdm import tqdm
 
-from config import CACHE_DIR_DEFAULT
+from config import CACHE_DIR_DEFAULT, TRAIN_EPOCHS_DEFAULT, TRAIN_TEST_RATIO, TRAIN_VALIDATE_CNT
 from dataset_utils import Dataset, tf_dataset, load_dataset, preprocess_dataset
 from model_utils import build_model, prediction_model
 from plot_utils import plot_samples, plot_predictions
 from text_utils import Vocabulary
-
-"""
-Defines proportion of training and test data
-Training data includes:
-* training samples itself - samples we train model on
-* validate samples - samples we evaluate progress during training
-   passed as additional parameter into 'fit' method.
-Test data is used after training is finished.
-"""
-TRAIN_TEST_RATIO = 0.9
-
-"""
-Defines proportion of training and validate samples (both part of samples we use for training)
-"""
-TRAIN_VALIDATE_RATIO = 0.95
-
-"""
-Default number of train epochs
-"""
-TRAIN_EPOCHS_DEFAULT = 10
 
 LOG = logging.getLogger(__name__)
 
@@ -65,6 +45,10 @@ def register_train_args(train_cmd: argparse.ArgumentParser):
         type=int,
         help="Number of train epochs."
     )
+    train_cmd.add_argument(
+        "-validation-list", dest="validation_list",
+        help="Path to file to store list of validation samples"
+    )
 
 
 def handle_train_cmd(args: argparse.Namespace):
@@ -74,6 +58,7 @@ def handle_train_cmd(args: argparse.Namespace):
         initial_model_path=args.initial_model,
         output_model=args.output_path,
         epochs=args.epochs,
+        validation_list=args.validation_list
     )
 
 
@@ -163,6 +148,7 @@ def run_train(
     initial_model_path,
     epochs,
     output_model,
+    validation_list,
 ):
     dataset, vocabulary = load_dataset(
         str_values_file_path=text_path, img_dir=img_root_path,
@@ -182,7 +168,7 @@ def run_train(
 
     total_ds_len = len(dataset)
     train_and_validate_ds_len = int(TRAIN_TEST_RATIO * total_ds_len)
-    train_ds_len = int(TRAIN_VALIDATE_RATIO * train_and_validate_ds_len)
+    train_ds_len = train_and_validate_ds_len - TRAIN_VALIDATE_CNT
 
     train_dataset = dataset[:train_ds_len]
     validate_dataset = dataset[train_ds_len:train_and_validate_ds_len]
@@ -193,8 +179,11 @@ def run_train(
     LOG.info(f"    Validation set size: {train_and_validate_ds_len - train_ds_len}")
     LOG.info(f"    Test set size: {total_ds_len - train_and_validate_ds_len}")
 
-    # TODO: print random validate file paths
-    # TODO: print random test file paths
+    if validation_list:
+        LOG.info(f"Saving validation list to '{validation_list}'...")
+        with open(validation_list, "w") as f:
+            for gt in tqdm(validate_dataset, desc="Saving validation list"):
+                print(f"{gt.img_path}: {gt.str_value}", file=f)
 
     plot_samples(train_dataset, vocabulary)
 
