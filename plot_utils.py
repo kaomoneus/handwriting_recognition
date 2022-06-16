@@ -1,3 +1,4 @@
+import cv2
 import numpy as np
 
 from dataset_utils import Dataset, tf_dataset
@@ -5,6 +6,7 @@ from model_utils import prediction_model
 from text_utils import Vocabulary, PADDING_TOKEN
 import matplotlib.pyplot as plt
 import tensorflow as tf
+
 
 def plot_samples(ds: Dataset, vocabulary: Vocabulary):
     """
@@ -79,5 +81,23 @@ def plot_predictions(model: tf.keras.Model, dataset: Dataset, vocabulary: Vocabu
             ax[i // 4, i % 4].imshow(img, cmap="gray")
             ax[i // 4, i % 4].set_title(title)
             ax[i // 4, i % 4].axis("off")
+
+    plt.show()
+
+
+def plot_dataset(dataset: Dataset):
+    """
+    Plots up to 16 dataset samples
+    :param dataset:
+    :return:
+    """
+    _, ax = plt.subplots(4, 4, figsize=(15, 8))
+
+    for i, gt in enumerate(dataset[:min(len(dataset), 16)]):
+        title = f"{gt.img_name}: '{gt.str_value}'" if gt.str_value else gt.img_name
+        img = cv2.imread(gt.img_path, flags=cv2.IMREAD_GRAYSCALE)
+        ax[i // 4, i % 4].imshow(img, cmap="gray")
+        ax[i // 4, i % 4].set_title(title)
+        ax[i // 4, i % 4].axis("off")
 
     plt.show()

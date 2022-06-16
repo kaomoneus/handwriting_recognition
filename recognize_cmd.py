@@ -4,7 +4,8 @@ from typing import Tuple
 
 from keras.saving.save import load_model
 
-from dataset_utils import GroundTruthPathsItem, ROI
+from config import CACHE_DIR_DEFAULT
+from dataset_utils import GroundTruthPathsItem, ROI, preprocess_dataset
 from plot_utils import plot_predictions
 from text_utils import load_vocabulary
 
@@ -34,8 +35,11 @@ def run_recognize(img_path: str, model_path: str, roi: ROI):
     ds = [GroundTruthPathsItem(
         str_value="",
         img_path=img_path,
-        roi=roi
+        roi=roi,
+        img_name=Path(img_path).stem
     )]
+
+    ds = preprocess_dataset(ds, only_threshold=True, cache_dir=CACHE_DIR_DEFAULT)
 
     vocabulary = load_vocabulary(str(Path(model_path).with_suffix(".voc")))
     model = load_model(model_path)

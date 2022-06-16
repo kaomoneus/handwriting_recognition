@@ -1,5 +1,6 @@
 import argparse
 import logging
+import os
 from pathlib import Path
 
 import numpy as np
@@ -9,7 +10,8 @@ import tensorflow as tf
 from tensorflow import keras
 from tqdm import tqdm
 
-from dataset_utils import Dataset, tf_dataset, load_dataset
+from config import CACHE_DIR_DEFAULT
+from dataset_utils import Dataset, tf_dataset, load_dataset, preprocess_dataset
 from model_utils import build_model, prediction_model
 from plot_utils import plot_samples, plot_predictions
 from text_utils import Vocabulary
@@ -71,7 +73,7 @@ def handle_train_cmd(args: argparse.Namespace):
         img_root_path=args.img,
         initial_model_path=args.initial_model,
         output_model=args.output_path,
-        epochs=args.epochs
+        epochs=args.epochs,
     )
 
 
@@ -155,12 +157,25 @@ def train_model(
     return history
 
 
-def run_train(text_path, img_root_path, initial_model_path, epochs, output_model):
+def run_train(
+    text_path,
+    img_root_path,
+    initial_model_path,
+    epochs,
+    output_model,
+):
     dataset, vocabulary = load_dataset(
         str_values_file_path=text_path, img_dir=img_root_path,
         max_word_len=32
     )
     vocabulary.save(str(Path(output_model).with_suffix(".voc")))
+
+    dataset = preprocess_dataset(
+        dataset,
+        only_threshold=False,
+        cache_dir=CACHE_DIR_DEFAULT,
+        keep=True
+    )
 
     model = init_model(initial_model_path, vocabulary)
     model.summary()
