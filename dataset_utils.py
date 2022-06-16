@@ -14,7 +14,8 @@ from tensorflow.python.data import AUTOTUNE
 from tqdm import tqdm
 
 from config import BATCH_SIZE
-from image_utils import tf_distortion_free_resize, load_and_pad_image, augment_image, distortion_free_resize
+from image_utils import tf_distortion_free_resize, load_and_pad_image, augment_image, distortion_free_resize, \
+    IMAGE_WIDTH, IMAGE_HEIGHT
 from text_utils import Vocabulary
 
 GROUND_TRUTH_FILENAME = "ground_truth.txt"
@@ -149,7 +150,7 @@ def _preprocess_item(
     if keep_existing_augmentations and cache_subdir.exists():
         if ground_truth_file.exists():
             with open(ground_truth_file, "r") as f:
-                str_value = f.readline()
+                str_value = f.readline().strip()
         else:
             str_value = ""
 
@@ -160,7 +161,7 @@ def _preprocess_item(
                 img_path=str(f),
                 roi=None
             )
-            for f in cache_subdir.iterdir() if f.is_file()
+            for f in cache_subdir.iterdir() if f.is_file() and f.suffix in {".png", ".jpg"}
         ]
         if res:
             LOG.debug(f"Augmentation for '{src_item.img_name}' exists, skipping")
@@ -297,7 +298,9 @@ def tf_dataset(ds: Dataset, vocabulary: Vocabulary) -> tf.data.Dataset:
         if roi[2] != 0:
             image = tf.image.crop_to_bounding_box(image, roi[1], roi[0], roi[3], roi[2])
 
-        image = tf_distortion_free_resize(image)
+        if image.shape[0] != IMAGE_WIDTH and image.shape[1] != IMAGE_HEIGHT:
+            image = tf_distortion_free_resize(image)
+
         image = tf.cast(image, tf.float32) / 255.0
 
         return {"image": image, "label": label}
