@@ -17,8 +17,14 @@ def register_recognize_args(recognize_cmd: argparse.ArgumentParser):
     # TODO: Make it possible to pass several roi instances
     #    in this case we will able to recognize several fields in given image.
     recognize_cmd.add_argument(
-        "-roi", help="Region of interest: <x, y, width, height>",
+        "-roi",
+        help="Region of interest: <x, y, width, height>",
         type=lambda roi_str: tuple(map(int, roi_str.replace(" ", "").split(",")))
+    )
+    recognize_cmd.add_argument(
+        "-preprocess",
+        help="Also apply preprocessing",
+        action="store_true"
     )
 
 
@@ -26,11 +32,12 @@ def handle_recognize_cmd(args: argparse.Namespace):
     run_recognize(
         img_path=args.img,
         model_path=args.model,
-        roi=args.roi
+        roi=args.roi,
+        preprocess=args.preprocess,
     )
 
 
-def run_recognize(img_path: str, model_path: str, roi: ROI):
+def run_recognize(img_path: str, model_path: str, roi: ROI, preprocess: bool):
 
     ds = [GroundTruthPathsItem(
         str_value="",
@@ -39,7 +46,12 @@ def run_recognize(img_path: str, model_path: str, roi: ROI):
         img_name=Path(img_path).stem
     )]
 
-    ds = preprocess_dataset(ds, only_threshold=True, cache_dir=CACHE_DIR_DEFAULT)
+    ds = preprocess_dataset(
+        ds,
+        only_threshold=(not preprocess),
+        full=preprocess,
+        cache_dir=CACHE_DIR_DEFAULT
+    )
 
     vocabulary = load_vocabulary(str(Path(model_path).with_suffix(".voc")))
     model = load_model(model_path)
