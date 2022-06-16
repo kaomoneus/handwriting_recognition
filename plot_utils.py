@@ -8,12 +8,10 @@ import matplotlib.pyplot as plt
 import tensorflow as tf
 
 
-def plot_samples(ds: Dataset, vocabulary: Vocabulary):
+def tf_plot_samples(tf_ds, vocabulary: Vocabulary):
     """
         ## Visualize a few samples
         """
-
-    tf_ds = tf_dataset(ds, vocabulary)
 
     for data in tf_ds.take(1):
         images, labels = data["image"], data["label"]
@@ -58,8 +56,7 @@ def _decode_batch_predictions(pred, vocabulary: Vocabulary):
     return output_text
 
 
-def plot_predictions(model: tf.keras.Model, dataset: Dataset, vocabulary: Vocabulary):
-    tf_ds = tf_dataset(dataset, vocabulary)
+def tf_plot_predictions(model: tf.keras.Model, tf_ds, vocabulary: Vocabulary):
 
     #  Let's check results on some test samples.
     predictor = prediction_model(model)

@@ -13,7 +13,7 @@ from tqdm import tqdm
 from config import CACHE_DIR_DEFAULT, TRAIN_EPOCHS_DEFAULT, TRAIN_TEST_RATIO, TRAIN_VALIDATE_CNT
 from dataset_utils import Dataset, tf_dataset, load_dataset, preprocess_dataset
 from model_utils import build_model, prediction_model
-from plot_utils import plot_samples, plot_predictions
+from plot_utils import tf_plot_samples, tf_plot_predictions
 from text_utils import Vocabulary
 
 LOG = logging.getLogger(__name__)
@@ -49,6 +49,11 @@ def register_train_args(train_cmd: argparse.ArgumentParser):
         "-validation-list", dest="validation_list",
         help="Path to file to store list of validation samples"
     )
+    train_cmd.add_argument(
+        "-plot", dest="plot",
+        action="store_true",
+        help="Plot samples and predictions"
+    )
 
 
 def handle_train_cmd(args: argparse.Namespace):
@@ -58,7 +63,8 @@ def handle_train_cmd(args: argparse.Namespace):
         initial_model_path=args.initial_model,
         output_model=args.output_path,
         epochs=args.epochs,
-        validation_list=args.validation_list
+        validation_list=args.validation_list,
+        plot=args.plot,
     )
 
 
@@ -73,11 +79,14 @@ def train_model(
     model: keras.Model,
     epochs: int,
     train_ds: Dataset, validate_ds: Dataset,
-    vocabulary: Vocabulary
+    vocabulary: Vocabulary,
+    plot: bool,
 ):
-    tf_train_ds = tf_dataset(train_ds, vocabulary)
+    tf_train_ds = tf_dataset(train_ds, vocabulary, resize=False)
+    tf_validation_ds = tf_dataset(validate_ds, vocabulary, resize=False)
 
-    tf_validation_ds = tf_dataset(validate_ds, vocabulary)
+    if plot:
+        tf_plot_samples(tf_train_ds, vocabulary)
 
     validation_images = []
     validation_labels = []
@@ -149,6 +158,7 @@ def run_train(
     epochs,
     output_model,
     validation_list,
+    plot
 ):
     dataset, vocabulary = load_dataset(
         str_values_file_path=text_path, img_dir=img_root_path,
@@ -185,9 +195,12 @@ def run_train(
             for gt in tqdm(validate_dataset, desc="Saving validation list"):
                 print(f"{gt.img_path}: {gt.str_value}", file=f)
 
-    plot_samples(train_dataset, vocabulary)
-
-    train_model(model, epochs, train_dataset, validate_dataset, vocabulary)
+    train_model(
+        model, epochs, train_dataset, validate_dataset, vocabulary,
+        plot=plot,
+    )
     model.save(output_model)
 
-    plot_predictions(model, test_dataset, vocabulary)
+    if plot:
+        tf_test_ds = tf_dataset(test_dataset, vocabulary, resize=False)
+        tf_plot_predictions(model, tf_test_ds, vocabulary)

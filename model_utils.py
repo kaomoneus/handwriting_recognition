@@ -127,8 +127,8 @@ def train_model(
     batch_size: int,
     vocabulary: Vocabulary
 ):
-    tf_train_ds = tf_dataset(train_ds, vocabulary, batch_size)
-    tf_validation_ds = tf_dataset(validate_ds, vocabulary, batch_size)
+    tf_train_ds = tf_dataset(train_ds, vocabulary, batch_size, resize=False)
+    tf_validation_ds = tf_dataset(validate_ds, vocabulary, batch_size, resize=False)
 
     validation_images = []
     validation_labels = []

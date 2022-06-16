@@ -279,7 +279,7 @@ def extract_images_and_labels(ds: Dataset) -> Tuple[List[str], List[str], List[R
     return paths, labels, rois
 
 
-def tf_dataset(ds: Dataset, vocabulary: Vocabulary) -> tf.data.Dataset:
+def tf_dataset(ds: Dataset, vocabulary: Vocabulary, resize: bool = True) -> tf.data.Dataset:
     """
     Converts dataset to internal tensorflow representation
     :param ds:
@@ -298,8 +298,11 @@ def tf_dataset(ds: Dataset, vocabulary: Vocabulary) -> tf.data.Dataset:
         if roi[2] != 0:
             image = tf.image.crop_to_bounding_box(image, roi[1], roi[0], roi[3], roi[2])
 
-        if image.shape[0] != IMAGE_WIDTH and image.shape[1] != IMAGE_HEIGHT:
+        if resize:
             image = tf_distortion_free_resize(image)
+        else:
+            image = tf.transpose(image, perm=[1, 0, 2])
+            image = tf.image.flip_left_right(image)
 
         image = tf.cast(image, tf.float32) / 255.0
 
