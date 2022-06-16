@@ -1,7 +1,9 @@
 import argparse
+import json
 import logging
 import os
 from pathlib import Path
+from typing import Optional
 
 import numpy as np
 from keras.backend import clear_session
@@ -10,11 +12,12 @@ import tensorflow as tf
 from tensorflow import keras
 from tqdm import tqdm
 
-from config import CACHE_DIR_DEFAULT, TRAIN_EPOCHS_DEFAULT, TRAIN_TEST_RATIO, TRAIN_VALIDATE_CNT
+from config import CACHE_DIR_DEFAULT, TRAIN_EPOCHS_DEFAULT, TRAIN_TEST_RATIO, TRAIN_VALIDATE_CNT, \
+    TRAIN_IGNORE_LIST_DEFAULT, VOCABULARY_DEFAULT
 from dataset_utils import Dataset, tf_dataset, load_dataset, preprocess_dataset
 from model_utils import build_model, prediction_model
 from plot_utils import tf_plot_samples, tf_plot_predictions
-from text_utils import Vocabulary
+from text_utils import Vocabulary, load_vocabulary
 
 LOG = logging.getLogger(__name__)
 
@@ -54,6 +57,41 @@ def register_train_args(train_cmd: argparse.ArgumentParser):
         action="store_true",
         help="Plot samples and predictions"
     )
+    train_cmd.add_argument(
+        "-ignore", dest="ignore_list",
+        action="append",
+        help="Words to be ignored",
+        default=TRAIN_IGNORE_LIST_DEFAULT,
+    )
+
+    voc_group = train_cmd.add_mutually_exclusive_group()
+
+    voc_group.add_argument(
+        "-voc",
+        dest="vocabulary",
+        help="Path to custom vocabulary file."
+             " If vocabulary is specified, then"
+             " all words with character not present in"
+             " vocabulary will be ignored.",
+    )
+    voc_group.add_argument(
+        "-voc-auto",
+        dest="voc_auto",
+        help="Generates vocabulary from dataset",
+        action="store_true"
+    )
+
+
+def parse_voc_args(args: argparse.Namespace):
+    if args.voc_auto:
+        LOG.info("Using auto vocabulary")
+        return None
+    if not args.vocabulary:
+        LOG.info("Using default vocabulary")
+        return Vocabulary(**VOCABULARY_DEFAULT)
+
+    LOG.info("Using vocabulary: " + args.voc)
+    return load_vocabulary(args.voc)
 
 
 def handle_train_cmd(args: argparse.Namespace):
@@ -63,8 +101,10 @@ def handle_train_cmd(args: argparse.Namespace):
         initial_model_path=args.initial_model,
         output_model=args.output_path,
         epochs=args.epochs,
+        ignore_list=args.ignore_list,
         validation_list=args.validation_list,
         plot=args.plot,
+        vocabulary=parse_voc_args(args)
     )
 
 
@@ -156,15 +196,20 @@ def run_train(
     img_root_path,
     initial_model_path,
     epochs,
+    ignore_list,
     output_model,
     validation_list,
-    plot
+    plot,
+    vocabulary: Optional[Vocabulary]
 ):
-    dataset, vocabulary = load_dataset(
+    dataset, auto_voc = load_dataset(
         str_values_file_path=text_path, img_dir=img_root_path,
-        max_word_len=32
+        vocabulary=vocabulary,
+        ignore_list=ignore_list,
     )
-    vocabulary.save(str(Path(output_model).with_suffix(".voc")))
+    if not vocabulary:
+        vocabulary = auto_voc
+        vocabulary.save(str(Path(output_model).with_suffix(".voc")))
 
     dataset = preprocess_dataset(
         dataset,

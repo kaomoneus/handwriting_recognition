@@ -34,3 +34,22 @@ TRAIN_EPOCHS_DEFAULT = 10
 Default path to preprocessed cache dir
 """
 CACHE_DIR_DEFAULT = Path(os.environ["HOME"]) / ".handwritten_preprocessing_cache"
+
+"""
+Default list of words to be ignored
+"""
+# Currently we put signs which require additional alignment
+# and as long we don't implement such alignment we keep them here
+TRAIN_IGNORE_LIST_DEFAULT = [
+    ",", ".", "#", "/", "`", "'", '"', "'"
+]
+
+"""
+Default maximum word length, if used, then all longer samples will be skipped
+"""
+MAX_WORD_LEN_DEFAULT = 21
+
+VOCABULARY_DEFAULT = {
+    "characters": "-'./0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
+    "max_len": MAX_WORD_LEN_DEFAULT
+}

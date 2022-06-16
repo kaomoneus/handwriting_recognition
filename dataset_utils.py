@@ -13,7 +13,7 @@ import tensorflow as tf
 from tensorflow.python.data import AUTOTUNE
 from tqdm import tqdm
 
-from config import BATCH_SIZE
+from config import BATCH_SIZE, MAX_WORD_LEN_DEFAULT
 from image_utils import tf_distortion_free_resize, load_and_pad_image, augment_image, distortion_free_resize, \
     IMAGE_WIDTH, IMAGE_HEIGHT
 from text_utils import Vocabulary
@@ -79,7 +79,8 @@ def _get_img_locs_recursive(
 def load_dataset(
     str_values_file_path: str,
     img_dir: str,
-    max_word_len: int
+    vocabulary: Optional[Vocabulary],
+    ignore_list: List[str] = None,
 ) -> Tuple[Dataset, Vocabulary]:
     """
     Loads dataset in our own format.
@@ -89,16 +90,24 @@ def load_dataset(
     its contents during debug.
     :param str_values_file_path: path to ground truth values (IAM ASCII format)
     :param img_dir: root path to images directory.
-    :param max_word_len: max allowed word length (restricted by network architecture)
+    :param vocabulary: vocabulary if provided, then it will be used to filter
+       words which are too long, or which use inappropriate characters
+    :param ignore_list list of words to be ignored
     :return: Dataset instance (which is a list)
     """
     res: Dataset = []
-    vocabulary = Vocabulary()
+    max_word_len = vocabulary.max_len if vocabulary else MAX_WORD_LEN_DEFAULT
+    auto_voc = Vocabulary()
+
+    if ignore_list:
+        ignore_list = set(ignore_list)
+
+    allowed_characters = set(vocabulary.characters) if vocabulary else None
 
     locs = get_img_locs(img_dir)
 
     with open(str_values_file_path, "r") as f:
-        with vocabulary.loader() as characters:
+        with auto_voc.builder() as characters:
 
             lines = [ll for ll in f.readlines() if not ll.startswith("#")]
             LOG.debug(f"Total lines/sentences read: {len(lines)}")
@@ -113,8 +122,18 @@ def load_dataset(
                 skip_msg = f"Skipping word '{str_value}', rendered as '{img_path}': %s"
 
                 if len(str_value) > max_word_len:
-                    LOG.warning(skip_msg % "exceeds max length {max_word_len} characters.")
+                    LOG.warning(skip_msg % f"exceeds max length {max_word_len} characters.")
                     continue
+
+                if ignore_list and str_value in ignore_list:
+                    LOG.warning(skip_msg % "is in ignore list")
+                    continue
+
+                if allowed_characters:
+                    disallowed = set(str_value).difference(allowed_characters)
+                    if disallowed:
+                        LOG.warning(skip_msg % f"contains disallowed characters: {''.join(disallowed)}")
+                        continue
 
                 if os.path.getsize(img_path) == 0:
                     LOG.warning(skip_msg % "image is empty")
@@ -129,7 +148,7 @@ def load_dataset(
                     img_name=img_name
                 ))
 
-    return res, vocabulary
+    return res, auto_voc
 
 
 def _preprocess_item(

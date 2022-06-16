@@ -5,7 +5,7 @@ from typing import Tuple
 from keras.saving.save import load_model
 
 from config import CACHE_DIR_DEFAULT
-from dataset_utils import GroundTruthPathsItem, ROI, preprocess_dataset
+from dataset_utils import GroundTruthPathsItem, ROI, preprocess_dataset, tf_dataset
 from plot_utils import tf_plot_predictions
 from text_utils import load_vocabulary
 
@@ -56,6 +56,6 @@ def run_recognize(img_path: str, model_path: str, roi: ROI, preprocess: bool):
     vocabulary = load_vocabulary(str(Path(model_path).with_suffix(".voc")))
     model = load_model(model_path)
 
-    tf_plot_predictions(model, ds, vocabulary)
+    tf_plot_predictions(model, tf_dataset(ds, vocabulary), vocabulary)
 
 
