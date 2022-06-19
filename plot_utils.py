@@ -1,14 +1,13 @@
 import logging
 
 import cv2
-import numpy as np
-
-from dataset_utils import Dataset, tf_dataset
-from model_utils import prediction_model
-from text_utils import Vocabulary, PADDING_TOKEN
 import matplotlib.pyplot as plt
+import numpy as np
 import tensorflow as tf
 
+from dataset_utils import Dataset
+from model_utils import prediction_model
+from text_utils import Vocabulary, PADDING_TOKEN
 
 LOG = logging.getLogger()
 
@@ -25,13 +24,35 @@ def onclick_handler_default(event):
 
 
 def make_subplots(onclick=onclick_handler_default):
-    figure, ax = plt.subplots(4, 4, figsize=(15, 8))
+    figure, ax = plt.subplots(8, 8, figsize=(15, 8))
     figure: plt.Figure = figure
     canvas: plt.FigureCanvasBase = figure.canvas
+
+    for i in range(ax.shape[0]):
+        for j in range(ax.shape[1]):
+            axx: plt.Axes = ax[i, j]
+            axx.set_frame_on(True)
+            axx.tick_params(
+                axis="both",
+                which='both',
+                bottom=False,
+                top=False,
+                left=False,
+                right=False,
+                labelbottom=False,
+                labelleft=False
+            )
 
     if onclick:
         canvas.mpl_connect('button_press_event', onclick_handler_default)
     return ax
+
+
+def set_subplot_img(ax: np.ndarray, row: int, col: int, img: np.ndarray, title: str):
+    axx = ax[row, col]
+    axx.imshow(img, cmap="gray")
+    text = axx.set_title(title, fontdict=dict(fontsize=6))
+    return text
 
 
 def tf_plot_samples(tf_ds, vocabulary: Vocabulary):
@@ -58,9 +79,7 @@ def tf_plot_samples(tf_ds, vocabulary: Vocabulary):
             label = tf.strings.reduce_join(vocabulary.num_to_char(indices))
             label = label.numpy().decode("utf-8")
 
-            ax[i // 4, i % 4].imshow(img, cmap="gray")
-            ax[i // 4, i % 4].set_title(label)
-            ax[i // 4, i % 4].axis("off")
+            set_subplot_img(ax, i // 4, i % 4, img, label)
 
     plt.show()
 
@@ -101,9 +120,8 @@ def tf_plot_predictions(model: tf.keras.Model, tf_ds, vocabulary: Vocabulary):
             img = img[:, :, 0]
 
             title = f"Prediction: {pred_texts[i]}"
-            ax[i // 4, i % 4].imshow(img, cmap="gray")
-            ax[i // 4, i % 4].set_title(title)
-            ax[i // 4, i % 4].axis("off")
+
+            set_subplot_img(ax, i // 4, i % 4, img, title)
 
     plt.show()
 
@@ -120,8 +138,6 @@ def plot_dataset(dataset: Dataset):
     for i, gt in enumerate(dataset[:min(len(dataset), 16)]):
         title = f"{gt.img_name}: '{gt.str_value}'" if gt.str_value else gt.img_name
         img = cv2.imread(gt.img_path, flags=cv2.IMREAD_GRAYSCALE)
-        ax[i // 4, i % 4].imshow(img, cmap="gray")
-        ax[i // 4, i % 4].set_title(title)
-        ax[i // 4, i % 4].axis("off")
+        set_subplot_img(ax, i // 4, i % 4, img, title)
 
     plt.show()
