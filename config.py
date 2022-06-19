@@ -49,6 +49,9 @@ Default maximum word length, if used, then all longer samples will be skipped
 """
 MAX_WORD_LEN_DEFAULT = 21
 
+"""
+Default LSTM vocabulary
+"""
 VOCABULARY_DEFAULT = {
     "characters": "-'./0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
     "max_len": MAX_WORD_LEN_DEFAULT

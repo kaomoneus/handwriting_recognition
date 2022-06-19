@@ -1,16 +1,26 @@
+import dataclasses
 import logging
+from typing import Union, List
 
 import cv2
 import matplotlib.pyplot as plt
 import matplotlib.spines as spines
 import numpy as np
+import tensorflow
 import tensorflow as tf
 
-from dataset_utils import Dataset
+from dataset_utils import Dataset, ROI
 from model_utils import prediction_model
 from text_utils import Vocabulary, PADDING_TOKEN
 
 LOG = logging.getLogger()
+
+
+@dataclasses.dataclass
+class PlotTask:
+    title: str
+    image: Union[np.ndarray, tensorflow.Tensor]
+    roi: ROI = None
 
 
 def onclick_handler_default(event):
@@ -25,13 +35,13 @@ def onclick_handler_default(event):
 
 
 def make_subplots(onclick=onclick_handler_default):
-    figure, ax = plt.subplots(8, 8, figsize=(15, 8))
+    figure, axes_grid = plt.subplots(8, 8, figsize=(15, 8))
     figure: plt.Figure = figure
     canvas: plt.FigureCanvasBase = figure.canvas
 
-    for i in range(ax.shape[0]):
-        for j in range(ax.shape[1]):
-            axx: plt.Axes = ax[i, j]
+    for i in range(axes_grid.shape[0]):
+        for j in range(axes_grid.shape[1]):
+            axx: plt.Axes = axes_grid[i, j]
             axx.set_frame_on(True)
             axx.tick_params(
                 axis="both",
@@ -50,7 +60,7 @@ def make_subplots(onclick=onclick_handler_default):
 
     if onclick:
         canvas.mpl_connect('button_press_event', onclick_handler_default)
-    return ax
+    return axes_grid
 
 
 def set_subplot_img(ax: np.ndarray, row: int, col: int, img: np.ndarray, title: str):
@@ -62,13 +72,14 @@ def set_subplot_img(ax: np.ndarray, row: int, col: int, img: np.ndarray, title: 
 
 def tf_plot_samples(tf_ds, vocabulary: Vocabulary):
     """
-        ## Visualize a few samples
-        """
+    ## Visualize a few samples
+    """
 
     for data in tf_ds.take(1):
         images, labels = data["image"], data["label"]
 
         ax = make_subplots()
+        tasks: List[PlotTask] = []
 
         for i in range(16):
             img = images[i]
@@ -84,9 +95,12 @@ def tf_plot_samples(tf_ds, vocabulary: Vocabulary):
             label = tf.strings.reduce_join(vocabulary.num_to_char(indices))
             label = label.numpy().decode("utf-8")
 
-            set_subplot_img(ax, i // 4, i % 4, img, label)
+            tasks.append(PlotTask(
+                title=label, image=img
+            ))
 
-    plt.show()
+        plot_tasks(ax, tasks)
+        plt.show()
 
 
 # A utility function to decode the output of the network.
@@ -110,9 +124,13 @@ def tf_plot_predictions(model: tf.keras.Model, tf_ds, vocabulary: Vocabulary):
 
     #  Let's check results on some test samples.
     predictor = prediction_model(model)
+
+    ax = make_subplots()
+
+    tasks: List[PlotTask] = []
+
     for batch in tf_ds.take(1):
         batch_images = batch["image"]
-        ax = make_subplots()
 
         preds = predictor.predict(batch_images)
         pred_texts = _decode_batch_predictions(preds, vocabulary)
@@ -126,8 +144,12 @@ def tf_plot_predictions(model: tf.keras.Model, tf_ds, vocabulary: Vocabulary):
 
             title = f"Prediction: {pred_texts[i]}"
 
-            set_subplot_img(ax, i // 4, i % 4, img, title)
+            tasks.append(PlotTask(
+                title=title,
+                image=img
+            ))
 
+    plot_tasks(ax, tasks)
     plt.show()
 
 
@@ -138,11 +160,35 @@ def plot_dataset(dataset: Dataset):
     :return:
     """
 
-    ax = make_subplots()
+    axes_grid = make_subplots()
 
-    for i, gt in enumerate(dataset[:min(len(dataset), 16)]):
-        title = f"{gt.img_name}: '{gt.str_value}'" if gt.str_value else gt.img_name
-        img = cv2.imread(gt.img_path, flags=cv2.IMREAD_GRAYSCALE)
-        set_subplot_img(ax, i // 4, i % 4, img, title)
+    tasks = [
+        PlotTask(
+            image=cv2.imread(gt.img_path, flags=cv2.IMREAD_GRAYSCALE),
+            title=f"{gt.img_name}: '{gt.str_value}'" if gt.str_value else gt.img_name,
+        )
+        for gt in dataset
+    ]
+
+    plot_tasks(axes_grid, tasks)
 
     plt.show()
+
+
+def plot_tasks(subplots, plot_tasks: List[PlotTask]):
+    """
+    Plots samples as described in plot_tasks
+    :param subplots: destination with subplots
+    :param plot_tasks: tasks to be plotted
+    """
+    rows, cols = tuple(subplots.shape)
+
+    max_images = rows * cols
+    tasks = plot_tasks if len(plot_tasks) <= max_images else plot_tasks[:max_images]
+
+    for i, pt in enumerate(tasks):
+        title = pt.title
+        img = pt.image
+        row = i // cols
+        col = i % cols
+        set_subplot_img(subplots, row, col, img, title)
