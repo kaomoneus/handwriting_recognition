@@ -2,6 +2,7 @@ import logging
 
 import cv2
 import matplotlib.pyplot as plt
+import matplotlib.spines as spines
 import numpy as np
 import tensorflow as tf
 
@@ -42,6 +43,10 @@ def make_subplots(onclick=onclick_handler_default):
                 labelbottom=False,
                 labelleft=False
             )
+            for spine in axx.spines.values():
+                spine: spines.Spine
+                spine.set_edgecolor('green')
+                spine.set_linewidth(2.5)
 
     if onclick:
         canvas.mpl_connect('button_press_event', onclick_handler_default)
