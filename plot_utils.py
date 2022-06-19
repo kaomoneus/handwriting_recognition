@@ -1,3 +1,5 @@
+import logging
+
 import cv2
 import numpy as np
 
@@ -8,6 +10,30 @@ import matplotlib.pyplot as plt
 import tensorflow as tf
 
 
+LOG = logging.getLogger()
+
+
+def onclick_handler_default(event):
+    click_type = 'double' if event.dblclick else 'single'
+    text: plt.Text = event.inaxes.title
+    LOG.info(
+        f"{click_type} Click: button {event.button}, x={event.x}, y={event.y}"
+    )
+    LOG.info(
+        f"     subplot '{text.get_text()}', at: {event.xdata}, {event.ydata}"
+    )
+
+
+def make_subplots(onclick=onclick_handler_default):
+    figure, ax = plt.subplots(4, 4, figsize=(15, 8))
+    figure: plt.Figure = figure
+    canvas: plt.FigureCanvasBase = figure.canvas
+
+    if onclick:
+        canvas.mpl_connect('button_press_event', onclick_handler_default)
+    return ax
+
+
 def tf_plot_samples(tf_ds, vocabulary: Vocabulary):
     """
         ## Visualize a few samples
@@ -16,7 +42,7 @@ def tf_plot_samples(tf_ds, vocabulary: Vocabulary):
     for data in tf_ds.take(1):
         images, labels = data["image"], data["label"]
 
-        _, ax = plt.subplots(4, 4, figsize=(15, 8))
+        ax = make_subplots()
 
         for i in range(16):
             img = images[i]
@@ -62,7 +88,7 @@ def tf_plot_predictions(model: tf.keras.Model, tf_ds, vocabulary: Vocabulary):
     predictor = prediction_model(model)
     for batch in tf_ds.take(1):
         batch_images = batch["image"]
-        _, ax = plt.subplots(4, 4, figsize=(15, 8))
+        ax = make_subplots()
 
         preds = predictor.predict(batch_images)
         pred_texts = _decode_batch_predictions(preds, vocabulary)
@@ -88,7 +114,8 @@ def plot_dataset(dataset: Dataset):
     :param dataset:
     :return:
     """
-    _, ax = plt.subplots(4, 4, figsize=(15, 8))
+
+    ax = make_subplots()
 
     for i, gt in enumerate(dataset[:min(len(dataset), 16)]):
         title = f"{gt.img_name}: '{gt.str_value}'" if gt.str_value else gt.img_name
