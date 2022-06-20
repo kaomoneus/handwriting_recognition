@@ -1,9 +1,12 @@
+import argparse
 import json
 import logging
 from typing import Dict, Any
 
 import tensorflow as tf
 from keras.layers import StringLookup
+
+from config import VOCABULARY_DEFAULT
 
 LOG = logging.getLogger(__name__)
 PADDING_TOKEN = 99
@@ -81,3 +84,34 @@ def load_vocabulary(path: str) -> Vocabulary():
     with open(path, "r") as f:
         voc = json.load(f)
         return Vocabulary(**voc)
+
+
+def add_voc_args(parser: argparse.ArgumentParser):
+    voc_group = parser.add_mutually_exclusive_group()
+
+    voc_group.add_argument(
+        "-voc",
+        dest="vocabulary",
+        help="Path to custom vocabulary file."
+             " If vocabulary is specified, then"
+             " all words with character not present in"
+             " vocabulary will be ignored.",
+    )
+    voc_group.add_argument(
+        "-voc-auto",
+        dest="voc_auto",
+        help="Generates vocabulary from dataset",
+        action="store_true"
+    )
+
+
+def parse_voc_args(args: argparse.Namespace):
+    if args.voc_auto:
+        LOG.info("Using auto vocabulary")
+        return None
+    if not args.vocabulary:
+        LOG.info("Using default vocabulary")
+        return Vocabulary(**VOCABULARY_DEFAULT)
+
+    LOG.info("Using vocabulary: " + args.voc)
+    return load_vocabulary(args.voc)

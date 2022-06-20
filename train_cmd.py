@@ -1,23 +1,21 @@
 import argparse
-import json
 import logging
-import os
 from pathlib import Path
 from typing import Optional
 
 import numpy as np
+import tensorflow as tf
 from keras.backend import clear_session
 from keras.saving.save import load_model
-import tensorflow as tf
 from tensorflow import keras
 from tqdm import tqdm
 
 from config import CACHE_DIR_DEFAULT, TRAIN_EPOCHS_DEFAULT, TRAIN_TEST_RATIO, TRAIN_VALIDATE_CNT, \
-    TRAIN_IGNORE_LIST_DEFAULT, VOCABULARY_DEFAULT
+    TRAIN_IGNORE_LIST_DEFAULT
 from dataset_utils import Dataset, tf_dataset, load_dataset, preprocess_dataset
 from model_utils import build_model, prediction_model
 from plot_utils import tf_plot_samples, tf_plot_predictions
-from text_utils import Vocabulary, load_vocabulary
+from text_utils import Vocabulary, add_voc_args, parse_voc_args
 
 LOG = logging.getLogger(__name__)
 
@@ -64,34 +62,7 @@ def register_train_args(train_cmd: argparse.ArgumentParser):
         default=TRAIN_IGNORE_LIST_DEFAULT,
     )
 
-    voc_group = train_cmd.add_mutually_exclusive_group()
-
-    voc_group.add_argument(
-        "-voc",
-        dest="vocabulary",
-        help="Path to custom vocabulary file."
-             " If vocabulary is specified, then"
-             " all words with character not present in"
-             " vocabulary will be ignored.",
-    )
-    voc_group.add_argument(
-        "-voc-auto",
-        dest="voc_auto",
-        help="Generates vocabulary from dataset",
-        action="store_true"
-    )
-
-
-def parse_voc_args(args: argparse.Namespace):
-    if args.voc_auto:
-        LOG.info("Using auto vocabulary")
-        return None
-    if not args.vocabulary:
-        LOG.info("Using default vocabulary")
-        return Vocabulary(**VOCABULARY_DEFAULT)
-
-    LOG.info("Using vocabulary: " + args.voc)
-    return load_vocabulary(args.voc)
+    add_voc_args(train_cmd)
 
 
 def handle_train_cmd(args: argparse.Namespace):

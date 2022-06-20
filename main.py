@@ -3,6 +3,7 @@ import logging
 
 from errors import Error
 from plot_cmd import handle_plot_cmd, register_plot_args
+from ploti_cmd import register_ploti_args, handle_ploti_cmd
 from recognize_cmd import register_recognize_args, handle_recognize_cmd
 from train_cmd import handle_train_cmd, register_train_args
 
@@ -19,6 +20,9 @@ def main():
         plot_cmd = subparsers.add_parser("plot", help="Plot dataset sample")
         register_plot_args(plot_cmd)
 
+        ploti_cmd = subparsers.add_parser("ploti", help="Plot dataset samples in interactive mode")
+        register_ploti_args(ploti_cmd)
+
         train_cmd = subparsers.add_parser("train", help="Runs neural network training and then evaluation")
         register_train_args(train_cmd)
 
@@ -33,6 +37,8 @@ def main():
             handle_recognize_cmd(args)
         elif args.cmd == "plot":
             handle_plot_cmd(args)
+        elif args.cmd == "ploti":
+            handle_ploti_cmd(args)
 
         return 0
 
