@@ -79,7 +79,7 @@ def _get_img_locs_recursive(
 def load_dataset(
     str_values_file_path: str,
     img_dir: str,
-    vocabulary: Optional[Vocabulary],
+    vocabulary: Optional[Vocabulary] = None,
     ignore_list: List[str] = None,
 ) -> Tuple[Dataset, Vocabulary]:
     """
@@ -112,6 +112,8 @@ def load_dataset(
             lines = [ll for ll in f.readlines() if not ll.startswith("#")]
             LOG.debug(f"Total lines/sentences read: {len(lines)}")
 
+            num_skipped = 0
+
             for line in lines:
                 l_items = line.split(" ")
                 str_value = l_items[VALUE_IDX].strip().replace("|", " ")
@@ -122,21 +124,25 @@ def load_dataset(
                 skip_msg = f"Skipping word '{str_value}', rendered as '{img_path}': %s"
 
                 if len(str_value) > max_word_len:
-                    LOG.warning(skip_msg % f"exceeds max length {max_word_len} characters.")
+                    LOG.debug(skip_msg % f"exceeds max length {max_word_len} characters.")
+                    num_skipped += 1
                     continue
 
                 if ignore_list and str_value in ignore_list:
-                    LOG.warning(skip_msg % "is in ignore list")
+                    LOG.debug(skip_msg % "is in ignore list")
+                    num_skipped += 1
                     continue
 
                 if allowed_characters:
                     disallowed = set(str_value).difference(allowed_characters)
                     if disallowed:
-                        LOG.warning(skip_msg % f"contains disallowed characters: {''.join(disallowed)}")
+                        LOG.debug(skip_msg % f"contains disallowed characters: {''.join(disallowed)}")
+                        num_skipped += 1
                         continue
 
                 if os.path.getsize(img_path) == 0:
-                    LOG.warning(skip_msg % "image is empty")
+                    LOG.debug(skip_msg % "image is empty")
+                    num_skipped += 1
                     continue
 
                 characters.update(str_value)
@@ -147,6 +153,8 @@ def load_dataset(
                     img_path=img_path,
                     img_name=img_name
                 ))
+
+            LOG.info(f"Total amount of skipped words: {num_skipped}")
 
     return res, auto_voc
 
