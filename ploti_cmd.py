@@ -1,18 +1,23 @@
 import argparse
-from pathlib import Path
-from typing import Tuple
+import dataclasses
+import json
+import logging
+import pathlib
+from typing import List
 
-from keras.saving.save import load_model
+from config import PLOTI_ROWS, PLOTI_COLS
+from dataset_utils import load_dataset
+from plot_utils import plot_interactive
+from text_utils import add_voc_args, parse_voc_args, Vocabulary
 
-from config import CACHE_DIR_DEFAULT
-from dataset_utils import GroundTruthPathsItem, ROI, preprocess_dataset, load_dataset
-from plot_utils import tf_plot_predictions, plot_dataset, plot_interactive
-from text_utils import load_vocabulary, add_voc_args, parse_voc_args, Vocabulary
+
+LOG = logging.getLogger(__name__)
 
 
 def register_ploti_args(ploti_cmd: argparse.ArgumentParser):
     ploti_cmd.add_argument("-img", help="Root directory with images", required=True)
     ploti_cmd.add_argument("-text", help="File with text ground truth", required=True)
+    ploti_cmd.add_argument("-state", help="File with current state", default=".plotistate.json")
 
     add_voc_args(ploti_cmd)
 
@@ -21,11 +26,12 @@ def handle_ploti_cmd(args: argparse.Namespace):
     run_ploti(
         img_path=args.img,
         text_path=args.text,
-        vocabulary=parse_voc_args(args)
+        vocabulary=parse_voc_args(args),
+        state_path=args.state
     )
 
 
-def run_ploti(img_path: str, text_path: str, vocabulary: Vocabulary):
+def run_ploti(img_path: str, text_path: str, vocabulary: Vocabulary, state_path: str):
 
     dataset, _ = load_dataset(
         str_values_file_path=text_path,
@@ -33,4 +39,46 @@ def run_ploti(img_path: str, text_path: str, vocabulary: Vocabulary):
         vocabulary=vocabulary,
     )
 
-    plot_interactive(dataset, 5, 5)
+    current_page = 0
+    samples_per_page = PLOTI_ROWS * PLOTI_COLS
+    marked = set()
+
+    @dataclasses.dataclass
+    class SerializedData:
+        marked: List[str] = dataclasses.field(default_factory=list)
+        current_page: int = 0
+        start_item: str = dataset[0].img_name
+
+    if pathlib.Path(state_path).exists():
+        with open(state_path, "r") as ff:
+            vv = json.load(ff)
+            state = SerializedData(**vv)
+            marked = set(state.marked)
+            current_item_idx_list = [i for i, x in enumerate(dataset) if x.img_name == state.start_item]
+            if len(current_item_idx_list):
+                current_page = current_item_idx_list[0] // samples_per_page
+                if current_page != state.current_page:
+                    LOG.warning("Calculated current page differs from saved one. Using the former.")
+            else:
+                LOG.warning("Saved item name not found in dataset. Using saved page number.")
+                current_page = state.current_page
+    else:
+        state = SerializedData()
+
+    def on_save(current_page: int, start_item: str):
+        state.current_page = current_page
+        state.start_item_name = start_item
+        state.marked = list(marked)
+        v = dataclasses.asdict(state)
+        with open(state_path, "w") as f:
+            json.dump(v, f, indent=4)
+            LOG.info(f"Page #{current_page}, state saved at '{state_path}'")
+
+    plot_interactive(
+        dataset,
+        PLOTI_ROWS, PLOTI_COLS,
+        marked=marked,
+        start_page=current_page,
+        on_page_changed=on_save,
+        on_save=on_save
+    )

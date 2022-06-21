@@ -69,10 +69,22 @@ def make_subplots(
     return axes_grid
 
 
+def make_marked(ax, marked):
+    for spine in ax.spines.values():
+        spine: spines.Spine
+        if marked:
+            spine.set_edgecolor('red')
+            spine.set_linewidth(2.5)
+        else:
+            spine.set_edgecolor('black')
+            spine.set_linewidth(0.5)
+
+
 def set_subplot_img(ax: np.ndarray, row: int, col: int, img: np.ndarray, title: str, marked):
     axx = ax[row, col]
     axx.imshow(img, cmap="gray")
     text = axx.set_title(title, fontdict=dict(fontsize=6))
+    make_marked(axx, marked)
     return text
 
 
@@ -187,6 +199,7 @@ def plot_interactive(
     marked: Set[str] = None,
     on_mark: Callable[[str, bool, plt.Axes], None] = None,
     on_page_changed: Callable[[int, str], None] = None,
+    on_save: Callable[[int, str], None] = None,
     start_page: int = 0
 ):
     """
@@ -197,6 +210,7 @@ def plot_interactive(
     :param marked: collection of marked items, mutable
     :param on_mark: callback, called when user marked or unmarked som item
     :param on_page_changed: called when user changed page, passes two arguments: page number and item nameß
+    :param on_save: called when user presses 'S', passes two arguments: page number and item nameß
     :param start_page: page
     :return:
     """
@@ -226,17 +240,10 @@ def plot_interactive(
 
     def on_mark_default(name: str, marked: bool, ax: plt.Axes):
         LOG.info(f"Item '{name}' was {'marked' if marked else 'unmarked'}")
-        for spine in ax.spines.values():
-            spine: spines.Spine
-            if marked:
-                spine.set_edgecolor('red')
-                spine.set_linewidth(2.5)
-            else:
-                spine.set_edgecolor('black')
-                spine.set_linewidth(0.5)
+        make_marked(ax, marked)
         plt.draw()
 
-    def on_page_change_default(page: int):
+    def on_page_change_default(page: int, name: str):
         LOG.info(f"Page changed to #{page}")
 
     if on_mark is None:
@@ -266,12 +273,20 @@ def plot_interactive(
         nonlocal current_page
         key = event.key
         LOG.info(f"Key pressed: {key}")
+
+        new_current_page = current_page
         if key in {"right", "]"}:
-            current_page = min(current_page + 1, max_page)
-        if key in {"left", "["}:
-            current_page = max(current_page - 1, 0)
-        plot_current_page()
-        plt.show()
+            new_current_page = min(current_page + 1, max_page)
+        elif key in {"left", "["}:
+            new_current_page = max(current_page - 1, 0)
+        elif key in {"cmd+s"} and on_save is not None:
+            on_save(current_page, dataset[samples_per_page * current_page].img_name)
+
+        if new_current_page != current_page:
+            on_page_changed(new_current_page, dataset[samples_per_page * current_page].img_name)
+            current_page = new_current_page
+            plot_current_page()
+            plt.show()
 
     subplots = make_subplots(
         onclick=on_mouse_click,

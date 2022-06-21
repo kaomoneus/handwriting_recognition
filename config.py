@@ -56,3 +56,13 @@ VOCABULARY_DEFAULT = {
     "characters": "-'./0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
     "max_len": MAX_WORD_LEN_DEFAULT
 }
+
+"""
+Amount of rows for ploti command
+"""
+PLOTI_ROWS = 8
+
+"""
+Amount of cols for ploti command
+"""
+PLOTI_COLS = 8
