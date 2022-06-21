@@ -43,7 +43,7 @@ def make_subplots(
     onkeypress=None,
     rows=4, cols=4
 ):
-    figure, axes_grid = plt.subplots(rows, cols, figsize=(15, 8))
+    figure, axes_grid = plt.subplots(rows, cols, figsize=(16*1.2, 9*1.2))
     figure: plt.Figure = figure
     canvas: plt.FigureCanvasBase = figure.canvas
 
@@ -87,7 +87,7 @@ def make_marked(ax, marked, ignored):
 def set_subplot_img(ax: np.ndarray, row: int, col: int, img: np.ndarray, title: str, marked, ignored):
     axx = ax[row, col]
     axx.imshow(img, cmap="gray")
-    text = axx.set_title(title, fontdict=dict(fontsize=6))
+    text = axx.set_title(title, fontdict=dict(fontsize=8))
     make_marked(axx, marked, ignored)
     return text
 
