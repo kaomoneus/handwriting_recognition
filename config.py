@@ -41,7 +41,7 @@ Default list of words to be ignored
 # Currently we put signs which require additional alignment
 # and as long we don't implement such alignment we keep them here
 TRAIN_IGNORE_LIST_DEFAULT = [
-    ",", ".", "#", "/", "`", "'", '"', "'", "M0", "M"
+    ",", ".", "#", "/", "`", "'", '"', "'", "M0", "M", "0M", "OM"
 ]
 
 """
