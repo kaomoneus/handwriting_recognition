@@ -290,7 +290,7 @@ def plot_interactive(
             on_save(current_page, dataset[samples_per_page * current_page].img_name)
 
         if new_current_page != current_page:
-            on_page_changed(new_current_page, dataset[samples_per_page * current_page].img_name)
+            on_page_changed(new_current_page, dataset[samples_per_page * new_current_page].img_name)
             current_page = new_current_page
             plot_current_page()
             plt.show()

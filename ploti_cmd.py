@@ -45,7 +45,7 @@ def run_ploti(img_path: str, text_path: str, vocabulary: Vocabulary, state_path:
     ignore = set(vocabulary.ignore) if vocabulary.ignore else None
 
     @dataclasses.dataclass
-    class SerializedData:
+    class State:
         marked: List[str] = dataclasses.field(default_factory=list)
         current_page: int = 0
         start_item: str = dataset[0].img_name
@@ -53,7 +53,7 @@ def run_ploti(img_path: str, text_path: str, vocabulary: Vocabulary, state_path:
     if pathlib.Path(state_path).exists():
         with open(state_path, "r") as ff:
             vv = json.load(ff)
-            state = SerializedData(**vv)
+            state = State(**vv)
             marked = set(state.marked)
             current_item_idx_list = [i for i, x in enumerate(dataset) if x.img_name == state.start_item]
             if len(current_item_idx_list):
@@ -63,14 +63,13 @@ def run_ploti(img_path: str, text_path: str, vocabulary: Vocabulary, state_path:
             else:
                 LOG.warning("Saved item name not found in dataset. Using saved page number.")
                 current_page = state.current_page
-    else:
-        state = SerializedData()
 
     def on_save(current_page: int, start_item: str):
-        state.current_page = current_page
-        state.start_item_name = start_item
-        state.marked = list(marked)
-        v = dataclasses.asdict(state)
+        v = dataclasses.asdict(State(
+            marked=list(marked),
+            current_page=current_page,
+            start_item=start_item
+        ))
         with open(state_path, "w") as f:
             json.dump(v, f, indent=4)
             LOG.info(f"Page #{current_page}, state saved at '{state_path}'")
