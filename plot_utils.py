@@ -22,6 +22,7 @@ class PlotTask:
     title: str
     image: Union[np.ndarray, tensorflow.Tensor]
     roi: ROI = None
+    marked: bool = False
 
 
 def onclick_handler_default(event):
@@ -59,10 +60,6 @@ def make_subplots(
                 labelbottom=False,
                 labelleft=False
             )
-            for spine in axx.spines.values():
-                spine: spines.Spine
-                spine.set_edgecolor('green')
-                spine.set_linewidth(2.5)
 
     if onclick:
         canvas.mpl_connect('button_press_event', onclick)
@@ -72,7 +69,7 @@ def make_subplots(
     return axes_grid
 
 
-def set_subplot_img(ax: np.ndarray, row: int, col: int, img: np.ndarray, title: str):
+def set_subplot_img(ax: np.ndarray, row: int, col: int, img: np.ndarray, title: str, marked):
     axx = ax[row, col]
     axx.imshow(img, cmap="gray")
     text = axx.set_title(title, fontdict=dict(fontsize=6))
@@ -188,8 +185,8 @@ def plot_interactive(
     dataset: Dataset,
     rows: int, cols: int,
     marked: Set[str] = None,
-    on_mark: Callable[[str, bool], None] = None,
-    on_page_changed: Callable[[int], None] = None,
+    on_mark: Callable[[str, bool, plt.Axes], None] = None,
+    on_page_changed: Callable[[int, str], None] = None,
     start_page: int = 0
 ):
     """
@@ -199,7 +196,7 @@ def plot_interactive(
     :param cols: amount of cols with plotted samples
     :param marked: collection of marked items, mutable
     :param on_mark: callback, called when user marked or unmarked som item
-    :param on_page_changed: called when user changed page
+    :param on_page_changed: called when user changed page, passes two arguments: page number and item nameß
     :param start_page: page
     :return:
     """
@@ -219,6 +216,7 @@ def plot_interactive(
             PlotTask(
                 image=cv2.imread(gt.img_path, flags=cv2.IMREAD_GRAYSCALE),
                 title=f"{gt.img_name}: '{gt.str_value}'" if gt.str_value else gt.img_name,
+                marked=(gt.img_name in marked)
             )
             for gt in dataset[sample_start:sample_end]
         ]
@@ -226,8 +224,17 @@ def plot_interactive(
         plot_tasks(subplots, tasks)
         plt.draw()
 
-    def on_mark_default(name: str, marked: bool):
+    def on_mark_default(name: str, marked: bool, ax: plt.Axes):
         LOG.info(f"Item '{name}' was {'marked' if marked else 'unmarked'}")
+        for spine in ax.spines.values():
+            spine: spines.Spine
+            if marked:
+                spine.set_edgecolor('red')
+                spine.set_linewidth(2.5)
+            else:
+                spine.set_edgecolor('black')
+                spine.set_linewidth(0.5)
+        plt.draw()
 
     def on_page_change_default(page: int):
         LOG.info(f"Page changed to #{page}")
@@ -250,10 +257,10 @@ def plot_interactive(
 
         if name in marked:
             marked.remove(name)
-            on_mark(name, False)
+            on_mark(name, False, event.inaxes)
         else:
             marked.add(name)
-            on_mark(name, True)
+            on_mark(name, True, event.inaxes)
 
     def on_key_pressed(event: KeyEvent):
         nonlocal current_page
@@ -292,4 +299,4 @@ def plot_tasks(subplots, plot_tasks: List[PlotTask]):
         img = pt.image
         row = i // cols
         col = i % cols
-        set_subplot_img(subplots, row, col, img, title)
+        set_subplot_img(subplots, row, col, img, title, pt.marked)
