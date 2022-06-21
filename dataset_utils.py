@@ -80,7 +80,7 @@ def load_dataset(
     str_values_file_path: str,
     img_dir: str,
     vocabulary: Optional[Vocabulary] = None,
-    ignore_list: List[str] = None,
+    apply_ignore_list: bool = False
 ) -> Tuple[Dataset, Vocabulary]:
     """
     Loads dataset in our own format.
@@ -99,8 +99,7 @@ def load_dataset(
     max_word_len = vocabulary.max_len if vocabulary else MAX_WORD_LEN_DEFAULT
     auto_voc = Vocabulary()
 
-    if ignore_list:
-        ignore_list = set(ignore_list)
+    ignore_list = set(vocabulary.ignore) if apply_ignore_list else None
 
     allowed_characters = set(vocabulary.characters) if vocabulary else None
 

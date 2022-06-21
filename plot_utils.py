@@ -23,6 +23,7 @@ class PlotTask:
     image: Union[np.ndarray, tensorflow.Tensor]
     roi: ROI = None
     marked: bool = False
+    ignored: bool = False
 
 
 def onclick_handler_default(event):
@@ -69,22 +70,25 @@ def make_subplots(
     return axes_grid
 
 
-def make_marked(ax, marked):
+def make_marked(ax, marked, ignored):
     for spine in ax.spines.values():
         spine: spines.Spine
         if marked:
             spine.set_edgecolor('red')
+            spine.set_linewidth(2.5)
+        elif ignored:
+            spine.set_edgecolor('orange')
             spine.set_linewidth(2.5)
         else:
             spine.set_edgecolor('black')
             spine.set_linewidth(0.5)
 
 
-def set_subplot_img(ax: np.ndarray, row: int, col: int, img: np.ndarray, title: str, marked):
+def set_subplot_img(ax: np.ndarray, row: int, col: int, img: np.ndarray, title: str, marked, ignored):
     axx = ax[row, col]
     axx.imshow(img, cmap="gray")
     text = axx.set_title(title, fontdict=dict(fontsize=6))
-    make_marked(axx, marked)
+    make_marked(axx, marked, ignored)
     return text
 
 
@@ -197,6 +201,7 @@ def plot_interactive(
     dataset: Dataset,
     rows: int, cols: int,
     marked: Set[str] = None,
+    ignored: Set[str] = None,
     on_mark: Callable[[str, bool, plt.Axes], None] = None,
     on_page_changed: Callable[[int, str], None] = None,
     on_save: Callable[[int, str], None] = None,
@@ -208,6 +213,7 @@ def plot_interactive(
     :param rows: amount of rows with plotted samples
     :param cols: amount of cols with plotted samples
     :param marked: collection of marked items, mutable
+    :param ignored: collection of ignored items (configured through dictionary)
     :param on_mark: callback, called when user marked or unmarked som item
     :param on_page_changed: called when user changed page, passes two arguments: page number and item nameß
     :param on_save: called when user presses 'S', passes two arguments: page number and item nameß
@@ -230,7 +236,8 @@ def plot_interactive(
             PlotTask(
                 image=cv2.imread(gt.img_path, flags=cv2.IMREAD_GRAYSCALE),
                 title=f"{gt.img_name}: '{gt.str_value}'" if gt.str_value else gt.img_name,
-                marked=(gt.img_name in marked)
+                marked=(gt.img_name in marked),
+                ignored=(gt.str_value in ignored) if ignored else False
             )
             for gt in dataset[sample_start:sample_end]
         ]
@@ -240,7 +247,7 @@ def plot_interactive(
 
     def on_mark_default(name: str, marked: bool, ax: plt.Axes):
         LOG.info(f"Item '{name}' was {'marked' if marked else 'unmarked'}")
-        make_marked(ax, marked)
+        make_marked(ax, marked, False)
         plt.draw()
 
     def on_page_change_default(page: int, name: str):
@@ -314,4 +321,4 @@ def plot_tasks(subplots, plot_tasks: List[PlotTask]):
         img = pt.image
         row = i // cols
         col = i % cols
-        set_subplot_img(subplots, row, col, img, title, pt.marked)
+        set_subplot_img(subplots, row, col, img, title, pt.marked, pt.ignored)

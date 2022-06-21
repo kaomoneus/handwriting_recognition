@@ -1,7 +1,7 @@
 import argparse
 import json
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 import tensorflow as tf
 from keras.layers import StringLookup
@@ -16,7 +16,7 @@ PADDING_TOKEN = 99
 #   instead "model" in context of our task is a combination of keras.Model + vocabulary.
 #   Thus it should be built together, load/save together
 class Vocabulary:
-    def __init__(self, characters: str = None, max_len: int = None):
+    def __init__(self, characters: str = None, max_len: int = None, ignore: List[str] = None):
         # Pay attention that "set" is mandatory to be transformed to sorted "list"
         # Otherwise whenever you start new python session and restore your model from storage
         # you'll get "mad" neural network, just because it uses vocabulary with
@@ -25,6 +25,7 @@ class Vocabulary:
         self.max_len = max_len
         self.num_to_char = None
         self.char_to_num = None
+        self.ignore = ignore
         if self.characters:
             self.build_convertors()
 
@@ -75,7 +76,8 @@ class Vocabulary:
         with open(path, "w") as f:
             fields = dict(
                 characters="".join(self.characters),
-                max_len=self.max_len
+                max_len=self.max_len,
+                ignore=self.ignore
             )
             json.dump(fields, f, indent=4)
 

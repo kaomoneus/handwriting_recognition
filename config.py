@@ -41,7 +41,7 @@ Default list of words to be ignored
 # Currently we put signs which require additional alignment
 # and as long we don't implement such alignment we keep them here
 TRAIN_IGNORE_LIST_DEFAULT = [
-    ",", ".", "#", "/", "`", "'", '"', "'"
+    ",", ".", "#", "/", "`", "'", '"', "'", "M0", "M"
 ]
 
 """
@@ -54,7 +54,8 @@ Default LSTM vocabulary
 """
 VOCABULARY_DEFAULT = {
     "characters": "-'./0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
-    "max_len": MAX_WORD_LEN_DEFAULT
+    "max_len": MAX_WORD_LEN_DEFAULT,
+    "ignore": TRAIN_IGNORE_LIST_DEFAULT
 }
 
 """

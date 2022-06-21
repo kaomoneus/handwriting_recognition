@@ -42,6 +42,7 @@ def run_ploti(img_path: str, text_path: str, vocabulary: Vocabulary, state_path:
     current_page = 0
     samples_per_page = PLOTI_ROWS * PLOTI_COLS
     marked = set()
+    ignore = set(vocabulary.ignore) if vocabulary.ignore else None
 
     @dataclasses.dataclass
     class SerializedData:
@@ -78,6 +79,7 @@ def run_ploti(img_path: str, text_path: str, vocabulary: Vocabulary, state_path:
         dataset,
         PLOTI_ROWS, PLOTI_COLS,
         marked=marked,
+        ignored=ignore,
         start_page=current_page,
         on_page_changed=on_save,
         on_save=on_save

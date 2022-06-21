@@ -10,8 +10,7 @@ from keras.saving.save import load_model
 from tensorflow import keras
 from tqdm import tqdm
 
-from config import CACHE_DIR_DEFAULT, TRAIN_EPOCHS_DEFAULT, TRAIN_TEST_RATIO, TRAIN_VALIDATE_CNT, \
-    TRAIN_IGNORE_LIST_DEFAULT
+from config import CACHE_DIR_DEFAULT, TRAIN_EPOCHS_DEFAULT, TRAIN_TEST_RATIO, TRAIN_VALIDATE_CNT
 from dataset_utils import Dataset, tf_dataset, load_dataset, preprocess_dataset
 from model_utils import build_model, prediction_model
 from plot_utils import tf_plot_samples, tf_plot_predictions
@@ -55,12 +54,6 @@ def register_train_args(train_cmd: argparse.ArgumentParser):
         action="store_true",
         help="Plot samples and predictions"
     )
-    train_cmd.add_argument(
-        "-ignore", dest="ignore_list",
-        action="append",
-        help="Words to be ignored",
-        default=TRAIN_IGNORE_LIST_DEFAULT,
-    )
 
     add_voc_args(train_cmd)
 
@@ -72,7 +65,6 @@ def handle_train_cmd(args: argparse.Namespace):
         initial_model_path=args.initial_model,
         output_model=args.output_path,
         epochs=args.epochs,
-        ignore_list=args.ignore_list,
         validation_list=args.validation_list,
         plot=args.plot,
         vocabulary=parse_voc_args(args)
@@ -167,7 +159,6 @@ def run_train(
     img_root_path,
     initial_model_path,
     epochs,
-    ignore_list,
     output_model,
     validation_list,
     plot,
@@ -176,7 +167,7 @@ def run_train(
     dataset, auto_voc = load_dataset(
         str_values_file_path=text_path, img_dir=img_root_path,
         vocabulary=vocabulary,
-        ignore_list=ignore_list,
+        apply_ignore_list=True,
     )
     if not vocabulary:
         vocabulary = auto_voc
