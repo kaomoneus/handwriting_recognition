@@ -5,7 +5,7 @@ import os
 from multiprocessing import Pool
 from os import listdir
 from pathlib import Path
-from typing import List, Dict, Tuple, Optional, Set
+from typing import List, Dict, Tuple, Optional, Set, Iterable
 
 import cv2
 import numpy as np
@@ -80,7 +80,9 @@ def load_dataset(
     str_values_file_path: str,
     img_dir: str,
     vocabulary: Optional[Vocabulary] = None,
-    apply_ignore_list: bool = False
+    apply_ignore_list: bool = False,
+    blacklist: Optional[Set[str]] = None,
+    max_ds_items: int = 0,
 ) -> Tuple[Dataset, Vocabulary]:
     """
     Loads dataset in our own format.
@@ -92,7 +94,9 @@ def load_dataset(
     :param img_dir: root path to images directory.
     :param vocabulary: vocabulary if provided, then it will be used to filter
        words which are too long, or which use inappropriate characters
-    :param ignore_list list of words to be ignored
+    :param apply_ignore_list: apply ignore list from vocabulary
+    :param blacklist: set of blacklisted dataset items
+    :param max_ds_items: dataset size limit
     :return: Dataset instance (which is a list)
     """
     res: Dataset = []
@@ -109,6 +113,9 @@ def load_dataset(
         with auto_voc.builder() as characters:
 
             lines = [ll for ll in f.readlines() if not ll.startswith("#")]
+            if max_ds_items:
+                lines = lines[:min(len(lines), max_ds_items)]
+
             LOG.debug(f"Total lines/sentences read: {len(lines)}")
 
             num_skipped = 0
@@ -129,6 +136,11 @@ def load_dataset(
 
                 if ignore_list and str_value in ignore_list:
                     LOG.debug(skip_msg % "is in ignore list")
+                    num_skipped += 1
+                    continue
+
+                if blacklist and img_name in blacklist:
+                    LOG.debug(skip_msg % "is in blacklist")
                     num_skipped += 1
                     continue
 
@@ -339,3 +351,22 @@ def tf_dataset(ds: Dataset, vocabulary: Vocabulary, resize: bool = True) -> tf.d
     ).map(_process_images_labels, num_parallel_calls=AUTOTUNE)
 
     return tf_ds.shuffle(len(ds)).batch(BATCH_SIZE).prefetch(AUTOTUNE).cache()
+
+
+@dataclasses.dataclass
+class MarkedState:
+    marked: List[str] = dataclasses.field(default_factory=list)
+    current_page: int = 0
+    start_item: str = ""
+
+
+def load_marked(state_path: str) -> MarkedState:
+    with open(state_path, "r") as ff:
+        vv = json.load(ff)
+        return MarkedState(**vv)
+
+
+def save_marked(state_path: str, state: MarkedState):
+    v = dataclasses.asdict(state)
+    with open(state_path, "w") as f:
+        json.dump(v, f, indent=4)

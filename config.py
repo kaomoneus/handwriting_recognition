@@ -23,7 +23,7 @@ TRAIN_TEST_RATIO = 0.9
 """
 Defines (absolute) amount of validation samples (used in 'fit' method)
 """
-TRAIN_VALIDATE_CNT = 100*BATCH_SIZE
+TRAIN_VALIDATE_CNT = 16*BATCH_SIZE
 
 """
 Default number of train epochs
@@ -57,6 +57,11 @@ VOCABULARY_DEFAULT = {
     "max_len": MAX_WORD_LEN_DEFAULT,
     "ignore": TRAIN_IGNORE_LIST_DEFAULT
 }
+
+"""
+Default path to marked list
+"""
+MARKED_PATH_DEFAULT = ".marked.json"
 
 """
 Amount of rows for ploti command
