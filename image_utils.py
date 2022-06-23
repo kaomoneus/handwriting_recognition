@@ -191,8 +191,9 @@ def augment_image(src_img: np.ndarray, only_threshold: bool) -> Dict[str, np.nda
     """
     res = {}
 
-    blured = cv2.GaussianBlur(src_img, (3, 3), sigmaX=1.)
-    threshold_value, thr_mid = cv2.threshold(blured, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    threshold_value, thr_mid = cv2.threshold(src_img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+    blured = cv2.GaussianBlur(thr_mid, (3, 3), sigmaX=1.)
 
     res["threshold"] = thr_mid
     if only_threshold:
