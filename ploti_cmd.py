@@ -66,7 +66,7 @@ def run_ploti(img_path: str, text_path: str, vocabulary: Vocabulary, state_path:
 
     def on_save(current_page: int, start_item: str):
         v = dataclasses.asdict(State(
-            marked=list(marked),
+            marked=list(sorted(marked)),
             current_page=current_page,
             start_item=start_item
         ))
