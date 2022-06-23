@@ -16,7 +16,7 @@ from config import CACHE_DIR_DEFAULT, TRAIN_EPOCHS_DEFAULT, TRAIN_TEST_RATIO, TR
     TENSORBOARD_LOGS_DEFAULT
 from dataset_utils import Dataset, tf_dataset, load_dataset, preprocess_dataset, load_marked
 from model_utils import build_model, prediction_model
-from plot_utils import tf_plot_samples, tf_plot_predictions
+from plot_utils import tf_plot_samples, tf_plot_predictions, plot_interactive
 from text_utils import Vocabulary, add_voc_args, parse_voc_args
 
 
@@ -97,13 +97,9 @@ def train_model(
     epochs: int,
     train_ds: Dataset, validate_ds: Dataset,
     vocabulary: Vocabulary,
-    plot: bool,
 ):
     tf_train_ds = tf_dataset(train_ds, vocabulary, resize=False)
     tf_validation_ds = tf_dataset(validate_ds, vocabulary, resize=False)
-
-    if plot:
-        tf_plot_samples(tf_train_ds, vocabulary)
 
     validation_images = []
     validation_labels = []
@@ -243,10 +239,12 @@ def run_train(
             for gt in tqdm(validate_dataset, desc="Saving validation list"):
                 print(f"{gt.img_path}: {gt.str_value}", file=f)
 
+    if plot:
+        plot_interactive(train_dataset, 8, 8)
+
     if epochs:
         train_model(
             model, epochs, train_dataset, validate_dataset, vocabulary,
-            plot=plot,
         )
         if output_model:
             model.save(output_model)
