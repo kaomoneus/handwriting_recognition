@@ -149,14 +149,19 @@ def train_model(
                 edit_distances.append(calculate_edit_distance(labels, predictions, vocabulary).numpy())
                 clear_session()
 
-            print(
-                f"Mean edit distance for epoch {epoch + 1}: {np.mean(edit_distances):.4f}"
+            med = np.mean(edit_distances)
+
+            LOG.info(
+                f"Mean edit distance for epoch {epoch + 1}: {med:.4f}"
             )
+            tf.summary.scalar("MED", data=med, step=epoch, description="Mean edit distance")
 
     edit_distance_callback = EditDistanceCallback()
 
     log_dir = pathlib.Path(TENSORBOARD_LOGS_DEFAULT) / datetime.now().strftime("%Y%m%d-%H%M%S")
     tensorboard_callback = TensorBoard(log_dir=str(log_dir), histogram_freq=1)
+    file_writer = tf.summary.create_file_writer(str(log_dir / "metrics"))
+    file_writer.set_as_default()
 
     # Train the model.
     history = model.fit(
