@@ -1,6 +1,8 @@
 import argparse
 import logging
+import pathlib
 import random
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -152,7 +154,9 @@ def train_model(
             )
 
     edit_distance_callback = EditDistanceCallback()
-    tensorboard_callback = TensorBoard(log_dir=TENSORBOARD_LOGS_DEFAULT, histogram_freq=1)
+
+    log_dir = pathlib.Path(TENSORBOARD_LOGS_DEFAULT) / datetime.now().strftime("%Y%m%d-%H%M%S")
+    tensorboard_callback = TensorBoard(log_dir=str(log_dir), histogram_freq=1)
 
     # Train the model.
     history = model.fit(
