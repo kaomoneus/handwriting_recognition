@@ -11,7 +11,7 @@ from tensorflow import keras
 from tqdm import tqdm
 
 from config import CACHE_DIR_DEFAULT, TRAIN_EPOCHS_DEFAULT, TRAIN_TEST_RATIO, TRAIN_VALIDATE_CNT
-from dataset_utils import Dataset, tf_dataset, load_dataset, preprocess_dataset
+from dataset_utils import Dataset, tf_dataset, load_dataset, preprocess_dataset, load_marked
 from model_utils import build_model, prediction_model
 from plot_utils import tf_plot_samples, tf_plot_predictions
 from text_utils import Vocabulary, add_voc_args, parse_voc_args
@@ -54,6 +54,15 @@ def register_train_args(train_cmd: argparse.ArgumentParser):
         action="store_true",
         help="Plot samples and predictions"
     )
+    train_cmd.add_argument(
+        "-max-ds-items",
+        type=int,
+        help="Maximum amount of loaded datasource items"
+    )
+    train_cmd.add_argument(
+        "-blacklist",
+        help="File with blacklisted item names. Should be in format of 'ploti' state."
+    )
 
     add_voc_args(train_cmd)
 
@@ -67,7 +76,9 @@ def handle_train_cmd(args: argparse.Namespace):
         epochs=args.epochs,
         validation_list=args.validation_list,
         plot=args.plot,
-        vocabulary=parse_voc_args(args)
+        vocabulary=parse_voc_args(args),
+        max_ds_items=args.max_ds_items,
+        blacklist_path=args.blacklist,
     )
 
 
@@ -162,12 +173,23 @@ def run_train(
     output_model,
     validation_list,
     plot,
-    vocabulary: Optional[Vocabulary]
+    vocabulary: Optional[Vocabulary],
+    max_ds_items: int,
+    blacklist_path: Optional[str]
 ):
+
+    blacklist = None
+    if blacklist_path:
+        state = load_marked(blacklist_path)
+        blacklist = set(state.marked)
+        LOG.info(f"Loaded blacklist with {len(blacklist)} items.")
+
     dataset, auto_voc = load_dataset(
         str_values_file_path=text_path, img_dir=img_root_path,
         vocabulary=vocabulary,
         apply_ignore_list=True,
+        blacklist=blacklist,
+        max_ds_items=max_ds_items,
     )
     if not vocabulary:
         vocabulary = auto_voc
