@@ -31,6 +31,15 @@ Default number of train epochs
 TRAIN_EPOCHS_DEFAULT = 10
 
 """
+Dataset shuffler seed. It's important to keep this seed same each time
+you learn *same* model. This seed is used for initial dataset shuffling.
+
+Splitting dataset onto train.train, train.validate and test sets will happen
+afterwards.
+"""
+DATASET_SHUFFLER_SEED = 1
+
+"""
 Default path to preprocessed cache dir
 """
 CACHE_DIR_DEFAULT = Path(os.environ["HOME"]) / ".handwritten_preprocessing_cache"

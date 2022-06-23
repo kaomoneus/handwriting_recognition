@@ -1,5 +1,6 @@
 import argparse
 import logging
+import random
 from pathlib import Path
 from typing import Optional
 
@@ -10,11 +11,12 @@ from keras.saving.save import load_model
 from tensorflow import keras
 from tqdm import tqdm
 
-from config import CACHE_DIR_DEFAULT, TRAIN_EPOCHS_DEFAULT, TRAIN_TEST_RATIO, TRAIN_VALIDATE_CNT
+from config import CACHE_DIR_DEFAULT, TRAIN_EPOCHS_DEFAULT, TRAIN_TEST_RATIO, TRAIN_VALIDATE_CNT, DATASET_SHUFFLER_SEED
 from dataset_utils import Dataset, tf_dataset, load_dataset, preprocess_dataset, load_marked
 from model_utils import build_model, prediction_model
 from plot_utils import tf_plot_samples, tf_plot_predictions
 from text_utils import Vocabulary, add_voc_args, parse_voc_args
+
 
 LOG = logging.getLogger(__name__)
 
@@ -201,6 +203,15 @@ def run_train(
         cache_dir=CACHE_DIR_DEFAULT,
         keep=True
     )
+
+    # Fixup shuffler
+    # We need to shuffle dataset before split.
+    # The purpose is that initially dataset is sorted by
+    # writers, and thus if we just dedicate last N of
+    # samples we have a risk to remove knowledge about
+    # particular handwriting styles totally.
+    ds_shuffler = random.Random(DATASET_SHUFFLER_SEED)
+    ds_shuffler.shuffle(dataset)
 
     model = init_model(initial_model_path, vocabulary)
     model.summary()
