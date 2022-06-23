@@ -8,7 +8,7 @@ from pathlib import Path
 """
 Training batch size
 """
-BATCH_SIZE = 64
+BATCH_SIZE_DEFAULT = 256
 
 """
 Defines proportion of training and test data
@@ -23,7 +23,7 @@ TRAIN_TEST_RATIO = 0.9
 """
 Defines (absolute) amount of validation samples (used in 'fit' method)
 """
-TRAIN_VALIDATE_CNT = 16*BATCH_SIZE
+TRAIN_VALIDATE_CNT = 16*64
 
 """
 Default number of train epochs

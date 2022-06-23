@@ -13,7 +13,7 @@ import tensorflow as tf
 from tensorflow.python.data import AUTOTUNE
 from tqdm import tqdm
 
-from config import BATCH_SIZE, MAX_WORD_LEN_DEFAULT
+from config import BATCH_SIZE_DEFAULT, MAX_WORD_LEN_DEFAULT
 from image_utils import tf_distortion_free_resize, load_and_pad_image, augment_image, distortion_free_resize, \
     IMAGE_WIDTH, IMAGE_HEIGHT
 from text_utils import Vocabulary
@@ -317,11 +317,18 @@ def extract_images_and_labels(ds: Dataset) -> Tuple[List[str], List[str], List[R
     return paths, labels, rois
 
 
-def tf_dataset(ds: Dataset, vocabulary: Vocabulary, resize: bool = True) -> tf.data.Dataset:
+def tf_dataset(
+    ds: Dataset,
+    vocabulary: Vocabulary,
+    resize: bool = True,
+    batch_size: int = BATCH_SIZE_DEFAULT,
+) -> tf.data.Dataset:
     """
     Converts dataset to internal tensorflow representation
     :param ds:
     :param vocabulary: is used to vectorize labels properly
+    :param resize: If set, then image will be resized.
+    :param batch_size: Amount of samples per batch
     :return: tf.Data.Dataset instance
     """
 
@@ -350,7 +357,7 @@ def tf_dataset(ds: Dataset, vocabulary: Vocabulary, resize: bool = True) -> tf.d
         (paths, labels, rois)
     ).map(_process_images_labels, num_parallel_calls=AUTOTUNE)
 
-    return tf_ds.shuffle(len(ds)).batch(BATCH_SIZE).prefetch(AUTOTUNE).cache()
+    return tf_ds.shuffle(len(ds)).batch(batch_size).prefetch(AUTOTUNE).cache()
 
 
 @dataclasses.dataclass

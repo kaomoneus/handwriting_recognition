@@ -15,7 +15,7 @@ from tensorflow import keras
 from tqdm import tqdm
 
 from config import CACHE_DIR_DEFAULT, TRAIN_EPOCHS_DEFAULT, TRAIN_TEST_RATIO, TRAIN_VALIDATE_CNT, DATASET_SHUFFLER_SEED, \
-    TENSORBOARD_LOGS_DEFAULT
+    TENSORBOARD_LOGS_DEFAULT, BATCH_SIZE_DEFAULT
 from dataset_utils import Dataset, tf_dataset, load_dataset, preprocess_dataset, load_marked
 from model_utils import build_model, prediction_model
 from plot_utils import tf_plot_samples, tf_plot_predictions, plot_interactive
@@ -51,6 +51,12 @@ def register_train_args(train_cmd: argparse.ArgumentParser):
         help="Number of train epochs."
     )
     train_cmd.add_argument(
+        "-b", dest="batch_size",
+        default=BATCH_SIZE_DEFAULT,
+        type=int,
+        help="Number of samples per batch."
+    )
+    train_cmd.add_argument(
         "-validation-list", dest="validation_list",
         help="Path to file to store list of validation samples"
     )
@@ -84,6 +90,7 @@ def handle_train_cmd(args: argparse.Namespace):
         vocabulary=parse_voc_args(args),
         max_ds_items=args.max_ds_items,
         blacklist_path=args.blacklist,
+        batch_size=args.batch_size,
     )
 
 
@@ -99,9 +106,10 @@ def train_model(
     epochs: int,
     train_ds: Dataset, validate_ds: Dataset,
     vocabulary: Vocabulary,
+    batch_size: int,
 ):
-    tf_train_ds = tf_dataset(train_ds, vocabulary, resize=False)
-    tf_validation_ds = tf_dataset(validate_ds, vocabulary, resize=False)
+    tf_train_ds = tf_dataset(train_ds, vocabulary, resize=False, batch_size=batch_size)
+    tf_validation_ds = tf_dataset(validate_ds, vocabulary, resize=False, batch_size=batch_size)
 
     validation_images = []
     validation_labels = []
@@ -184,7 +192,8 @@ def run_train(
     plot,
     vocabulary: Optional[Vocabulary],
     max_ds_items: int,
-    blacklist_path: Optional[str]
+    blacklist_path: Optional[str],
+    batch_size: int,
 ):
 
     blacklist = None
@@ -235,6 +244,7 @@ def run_train(
     LOG.info(f"    Train set size: {train_ds_len}")
     LOG.info(f"    Validation set size: {train_and_validate_ds_len - train_ds_len}")
     LOG.info(f"    Test set size: {total_ds_len - train_and_validate_ds_len}")
+    LOG.info(f"    Samples per batch: {batch_size}")
 
     if epochs and not output_model:
         LOG.warning(
@@ -254,10 +264,11 @@ def run_train(
     if epochs:
         train_model(
             model, epochs, train_dataset, validate_dataset, vocabulary,
+            batch_size,
         )
         if output_model:
             model.save(output_model)
 
     if plot:
-        tf_test_ds = tf_dataset(test_dataset, vocabulary, resize=False)
+        tf_test_ds = tf_dataset(test_dataset, vocabulary, resize=False, batch_size=batch_size)
         tf_plot_predictions(model, tf_test_ds, vocabulary)
