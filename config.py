@@ -73,6 +73,11 @@ Default path to marked list
 MARKED_PATH_DEFAULT = ".marked.json"
 
 """
+Default path to tensorboard logs dir
+"""
+TENSORBOARD_LOGS_DEFAULT = ".tensorboard_logs"
+
+"""
 Amount of rows for ploti command
 """
 PLOTI_ROWS = 8

@@ -7,11 +7,13 @@ from typing import Optional
 import numpy as np
 import tensorflow as tf
 from keras.backend import clear_session
+from keras.callbacks import TensorBoard
 from keras.saving.save import load_model
 from tensorflow import keras
 from tqdm import tqdm
 
-from config import CACHE_DIR_DEFAULT, TRAIN_EPOCHS_DEFAULT, TRAIN_TEST_RATIO, TRAIN_VALIDATE_CNT, DATASET_SHUFFLER_SEED
+from config import CACHE_DIR_DEFAULT, TRAIN_EPOCHS_DEFAULT, TRAIN_TEST_RATIO, TRAIN_VALIDATE_CNT, DATASET_SHUFFLER_SEED, \
+    TENSORBOARD_LOGS_DEFAULT
 from dataset_utils import Dataset, tf_dataset, load_dataset, preprocess_dataset, load_marked
 from model_utils import build_model, prediction_model
 from plot_utils import tf_plot_samples, tf_plot_predictions
@@ -38,7 +40,6 @@ def register_train_args(train_cmd: argparse.ArgumentParser):
     )
     train_cmd.add_argument(
         "-o", dest="output_path",
-        required=True,
         help="Output model path. Model will be trained and saved at this path."
     )
     train_cmd.add_argument(
@@ -155,13 +156,14 @@ def train_model(
             )
 
     edit_distance_callback = EditDistanceCallback()
+    tensorboard_callback = TensorBoard(log_dir=TENSORBOARD_LOGS_DEFAULT, histogram_freq=1)
 
     # Train the model.
     history = model.fit(
         tf_train_ds,
         validation_data=tf_validation_ds,
         epochs=epochs,
-        callbacks=[edit_distance_callback],
+        callbacks=[edit_distance_callback, tensorboard_callback],
     )
 
     return history
@@ -229,17 +231,25 @@ def run_train(
     LOG.info(f"    Validation set size: {train_and_validate_ds_len - train_ds_len}")
     LOG.info(f"    Test set size: {total_ds_len - train_and_validate_ds_len}")
 
+    if epochs and not output_model:
+        LOG.warning(
+            f"You requested training, but didn't specify 'output_path'"
+            f" trained model WILL NOT BE SAVED."
+        )
+
     if validation_list:
         LOG.info(f"Saving validation list to '{validation_list}'...")
         with open(validation_list, "w") as f:
             for gt in tqdm(validate_dataset, desc="Saving validation list"):
                 print(f"{gt.img_path}: {gt.str_value}", file=f)
 
-    train_model(
-        model, epochs, train_dataset, validate_dataset, vocabulary,
-        plot=plot,
-    )
-    model.save(output_model)
+    if epochs:
+        train_model(
+            model, epochs, train_dataset, validate_dataset, vocabulary,
+            plot=plot,
+        )
+        if output_model:
+            model.save(output_model)
 
     if plot:
         tf_test_ds = tf_dataset(test_dataset, vocabulary, resize=False)
