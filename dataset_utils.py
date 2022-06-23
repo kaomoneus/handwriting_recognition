@@ -286,18 +286,18 @@ def preprocess_dataset(
             res.append(d)
         res.extend(gts)
 
-    if len(ds) > 100:
+    if len(ds) > 10000:
         LOG.info("Launching DS preprocessing pool...")
         pool = Pool(processes=(os.cpu_count() * 4))
 
         for d, gts in tqdm(
             pool.imap_unordered(_preprocess_item_task, preprocess_args),
             total=len(ds),
-            desc="Preprocessing dataset"
+            desc="Preprocessing dataset (async)"
         ):
             apply_preprocess_result(d, gts)
     else:
-        for args in preprocess_args:
+        for args in tqdm(preprocess_args, desc="Preprocessing dataset"):
             d, gts = _preprocess_item(**args)
             apply_preprocess_result(d, gts)
 
