@@ -3,17 +3,20 @@
 You will notice that the content of original image is kept as faithful as possible and has
 been padded accordingly.
 """
+import logging
 from typing import Tuple
 
 import numpy as np
 import tensorflow as tf
+import tensorflow.python.data
+from keras.backend import clear_session
 from keras.saving.save import load_model
 from tensorflow import keras
 from tqdm import tqdm
 
 from dataset_utils import Dataset, tf_dataset
 from image_utils import IMAGE_WIDTH, IMAGE_HEIGHT
-from text_utils import Vocabulary
+from text_utils import Vocabulary, PADDING_TOKEN
 
 """
 ## Model
@@ -21,6 +24,9 @@ from text_utils import Vocabulary
 Our model will use the CTC loss as an endpoint layer. For a detailed understanding of the
 CTC loss, refer to [this post](https://distill.pub/2017/ctc/).
 """
+
+
+LOG = logging.getLogger(__name__)
 
 
 class CTCLayer(keras.layers.Layer):
@@ -190,3 +196,62 @@ def train_model(
 
     return history
 
+
+def calculate_edit_distance(labels, predictions, vocabulary: Vocabulary):
+    # Get a single batch and convert its labels to sparse tensors.
+    labels = tf.where(
+        tf.equal(labels, PADDING_TOKEN),
+        x=tf.constant(-1, labels.dtype, labels.shape),
+        y=labels
+    )
+    sparse_labels: tf.SparseTensor = tf.cast(tf.sparse.from_dense(labels), dtype=tf.int64)
+
+    # Make predictions and convert them to sparse tensors.
+    input_len = np.ones(predictions.shape[0]) * predictions.shape[1]
+    predictions_decoded: tf.Tensor = tf.keras.backend.ctc_decode(
+        predictions, input_length=input_len, greedy=True
+    )[0][0][:, :vocabulary.max_len]
+    sparse_predictions = tf.cast(
+        tf.sparse.from_dense(predictions_decoded), dtype=tf.int64
+    )
+
+    # Compute individual edit distances and average them out.
+    edit_distances = tf.edit_distance(
+        sparse_predictions, sparse_labels, normalize=False
+    )
+    return tf.reduce_mean(edit_distances)
+
+
+class EditDistanceCallback(keras.callbacks.Callback):
+    def __init__(
+        self,
+        model,
+        validation_images,
+        validation_labels,
+        vocabulary: Vocabulary,
+    ):
+        super().__init__()
+        self.prediction_model = prediction_model(model)
+        self.validation_images = validation_images
+        self.validation_labels = validation_labels
+        self.validation_set_size = len(validation_labels)
+        self.vocabulary = vocabulary
+
+    def on_epoch_end(self, epoch, logs=None):
+        edit_distances = []
+
+        for i in tqdm(range(self.validation_set_size), desc=f"Evaluating epoch #{epoch}"):
+            labels = self.validation_labels[i]
+            images = self.validation_images[i]
+
+            predictions = self.prediction_model.predict(images, verbose=0)
+            edit_distances.append(calculate_edit_distance(labels, predictions, self.vocabulary).numpy())
+
+            clear_session()
+
+        med = np.mean(edit_distances)
+
+        LOG.info(
+            f"Mean edit distance for epoch {epoch + 1}: {med:.4f}"
+        )
+        tf.summary.scalar("MED", data=med, step=epoch, description="Mean edit distance")

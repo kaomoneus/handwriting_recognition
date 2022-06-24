@@ -6,9 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-import numpy as np
 import tensorflow as tf
-from keras.backend import clear_session
 from keras.callbacks import TensorBoard
 from keras.saving.save import load_model
 from tensorflow import keras
@@ -16,26 +14,21 @@ from tqdm import tqdm
 
 from config import CACHE_DIR_DEFAULT, TRAIN_EPOCHS_DEFAULT, TRAIN_TEST_RATIO, TRAIN_VALIDATE_CNT, DATASET_SHUFFLER_SEED, \
     TENSORBOARD_LOGS_DEFAULT, BATCH_SIZE_DEFAULT
-from dataset_utils import Dataset, tf_dataset, load_dataset, preprocess_dataset, load_marked
-from model_utils import build_model, prediction_model
-from plot_utils import tf_plot_samples, tf_plot_predictions, plot_interactive
+from dataset_utils import Dataset, tf_dataset, load_dataset, preprocess_dataset, load_marked, parse_dataset_args, \
+    add_dataset_args, save_marked, MarkedState
+from model_utils import build_model, EditDistanceCallback
+from plot_utils import tf_plot_predictions, plot_interactive
 from text_utils import Vocabulary, add_voc_args, parse_voc_args
-
 
 LOG = logging.getLogger(__name__)
 
 
+# TODO:
+#   1. rename all command related calls into:
+#      register, handle, ...
+#      without mentioning command name
+#   2. Use aggregation in main, to get all modules from 'commands' submudule.
 def register_train_args(train_cmd: argparse.ArgumentParser):
-    train_cmd.add_argument(
-        "-text",
-        required=True,
-        help="ASCII file with lines or sentences description.",
-    )
-    train_cmd.add_argument(
-        "-img",
-        required=True,
-        help="Root directory of IAM image lines or sentences files",
-    )
     train_cmd.add_argument(
         "-i", dest="initial_model",
         help="Initial model path. If provided then saved model will be loaded."
@@ -65,31 +58,22 @@ def register_train_args(train_cmd: argparse.ArgumentParser):
         action="store_true",
         help="Plot samples and predictions"
     )
-    train_cmd.add_argument(
-        "-max-ds-items",
-        type=int,
-        help="Maximum amount of loaded datasource items"
-    )
-    train_cmd.add_argument(
-        "-blacklist",
-        help="File with blacklisted item names. Should be in format of 'ploti' state."
-    )
 
     add_voc_args(train_cmd)
+    add_dataset_args(train_cmd)
 
 
 def handle_train_cmd(args: argparse.Namespace):
+    vocabulary = parse_voc_args(args)
+    dataset, _ = parse_dataset_args(args, vocabulary)
     run_train(
-        text_path=args.text,
-        img_root_path=args.img,
+        dataset=dataset,
         initial_model_path=args.initial_model,
         output_model=args.output_path,
         epochs=args.epochs,
         validation_list=args.validation_list,
         plot=args.plot,
         vocabulary=parse_voc_args(args),
-        max_ds_items=args.max_ds_items,
-        blacklist_path=args.blacklist,
         batch_size=args.batch_size,
     )
 
@@ -118,53 +102,11 @@ def train_model(
         validation_images.append(batch["image"])
         validation_labels.append(batch["label"])
 
-    validation_set_size = len(validation_images)
-
-    def calculate_edit_distance(labels, predictions, vocabulary: Vocabulary):
-        # Get a single batch and convert its labels to sparse tensors.
-        saprse_labels = tf.cast(tf.sparse.from_dense(labels), dtype=tf.int64)
-
-        # Make predictions and convert them to sparse tensors.
-        input_len = np.ones(predictions.shape[0]) * predictions.shape[1]
-        predictions_decoded = tf.keras.backend.ctc_decode(
-            predictions, input_length=input_len, greedy=True
-        )[0][0][:, :vocabulary.max_len]
-        sparse_predictions = tf.cast(
-            tf.sparse.from_dense(predictions_decoded), dtype=tf.int64
-        )
-
-        # Compute individual edit distances and average them out.
-        edit_distances = tf.edit_distance(
-            sparse_predictions, saprse_labels, normalize=False
-        )
-        return tf.reduce_mean(edit_distances)
-
-    class EditDistanceCallback(keras.callbacks.Callback):
-        def __init__(self):
-            super().__init__()
-            self.prediction_model = prediction_model(model)
-
-        def on_epoch_end(self, epoch, logs=None):
-            edit_distances = []
-
-            # FIXME: Evaluation is slow, may be because of 'tqdm' I don't know...
-            for i in tqdm(range(validation_set_size), desc=f"Evaluating epoch #{epoch}"):
-                labels = validation_labels[i]
-                predictions = self.prediction_model.predict(
-                    validation_images[i],
-                    verbose=0
-                )
-                edit_distances.append(calculate_edit_distance(labels, predictions, vocabulary).numpy())
-                clear_session()
-
-            med = np.mean(edit_distances)
-
-            LOG.info(
-                f"Mean edit distance for epoch {epoch + 1}: {med:.4f}"
-            )
-            tf.summary.scalar("MED", data=med, step=epoch, description="Mean edit distance")
-
-    edit_distance_callback = EditDistanceCallback()
+    edit_distance_callback = EditDistanceCallback(
+        model,
+        validation_images, validation_labels,
+        vocabulary
+    )
 
     log_dir = pathlib.Path(TENSORBOARD_LOGS_DEFAULT) / datetime.now().strftime("%Y%m%d-%H%M%S")
     tensorboard_callback = TensorBoard(log_dir=str(log_dir), histogram_freq=1)
@@ -183,36 +125,15 @@ def train_model(
 
 
 def run_train(
-    text_path,
-    img_root_path,
+    dataset: Dataset,
     initial_model_path,
     epochs,
     output_model,
     validation_list,
     plot,
     vocabulary: Optional[Vocabulary],
-    max_ds_items: int,
-    blacklist_path: Optional[str],
     batch_size: int,
 ):
-
-    blacklist = None
-    if blacklist_path:
-        state = load_marked(blacklist_path)
-        blacklist = set(state.marked)
-        LOG.info(f"Loaded blacklist with {len(blacklist)} items.")
-
-    dataset, auto_voc = load_dataset(
-        str_values_file_path=text_path, img_dir=img_root_path,
-        vocabulary=vocabulary,
-        apply_ignore_list=True,
-        blacklist=blacklist,
-        max_ds_items=max_ds_items,
-    )
-    if not vocabulary:
-        vocabulary = auto_voc
-        vocabulary.save(str(Path(output_model).with_suffix(".voc")))
-
     dataset = preprocess_dataset(
         dataset,
         only_threshold=False,
@@ -254,9 +175,10 @@ def run_train(
 
     if validation_list:
         LOG.info(f"Saving validation list to '{validation_list}'...")
-        with open(validation_list, "w") as f:
-            for gt in tqdm(validate_dataset, desc="Saving validation list"):
-                print(f"{gt.img_path}: {gt.str_value}", file=f)
+        save_marked(
+            state_path=validation_list,
+            state=MarkedState(marked=[gt.img_name for gt in validate_dataset])
+        )
 
     if plot:
         plot_interactive(train_dataset, 8, 8)

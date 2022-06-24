@@ -151,10 +151,10 @@ def tf_plot_predictions(model: tf.keras.Model, tf_ds, vocabulary: Vocabulary):
 
     tasks: List[PlotTask] = []
 
-    for batch in tf_ds.take(1):
+    for batch in tf_ds:
         batch_images = batch["image"]
 
-        preds = predictor.predict(batch_images)
+        preds = predictor.predict(batch_images, verbose=False)
         pred_texts = _decode_batch_predictions(preds, vocabulary)
 
         for i in range(min(16, len(batch_images))):
