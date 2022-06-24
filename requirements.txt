@@ -4,5 +4,6 @@ numpy
 keras
 pyyaml
 tqdm
-opencv-python
+opencv-python==4.5.5.62
+opencv-contrib-python==4.5.5.62
 tensorboard

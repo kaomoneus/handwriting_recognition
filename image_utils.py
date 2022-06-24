@@ -1,5 +1,5 @@
 import logging
-from typing import Tuple, Optional, Dict
+from typing import Tuple, Optional, Dict, Callable
 
 import numpy
 import numpy as np
@@ -182,6 +182,44 @@ def load_and_pad_image(
     return image
 
 
+def magnie_humie(src_img: np.ndarray):
+    splines = cv2.createThinPlateSplineShapeTransformer()
+
+    width = src_img.shape[1]
+    height = src_img.shape[0]
+
+    def abs_array(a: np.ndarray):
+        a[:, 0] *= width*2
+        a[:, 0] -= width/2
+        a[:, 1] *= height*2
+        a[:, 1] -= height/2
+        return a.reshape(1, -1, 2)
+
+    source_points = abs_array(numpy.array([
+        [0, 0], [1, 0],
+        [0, 1], [1, 1],
+        [0, 0.3], [1, 0.3],
+        [1, 0.6], [0, 0.6],
+    ], dtype=np.float32))
+
+    target_points = abs_array(numpy.array([
+        [0, 0], [1, 0],
+        [0, 1], [1, 1],
+        [0, 0.1], [1, 0.1],
+        [1, 0.9], [0, 0.9],
+    ], dtype=np.float32))
+
+    matches = numpy.array([cv2.DMatch(i, i, 0) for i in range(source_points.shape[1])])
+
+    splines.estimateTransformation(source_points, target_points, matches)
+    magnie = splines.warpImage(src_img, borderValue=255.)
+
+    splines.estimateTransformation(target_points, source_points, matches)
+    humie = splines.warpImage(src_img, borderValue=255.)
+
+    return magnie, humie
+
+
 def augment_image(src_img: np.ndarray, only_threshold: bool) -> Dict[str, np.ndarray]:
     """
     Augments image
@@ -215,4 +253,5 @@ def augment_image(src_img: np.ndarray, only_threshold: bool) -> Dict[str, np.nda
         "threshold_left": thr_left,
         "threshold_right": thr_right,
     })
+
     return res

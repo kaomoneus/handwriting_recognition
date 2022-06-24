@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import pathlib
+from json import JSONDecodeError
 from multiprocessing import Pool
 from os import listdir
 from pathlib import Path
@@ -17,7 +18,7 @@ from tqdm import tqdm
 from config import BATCH_SIZE_DEFAULT, MAX_WORD_LEN_DEFAULT
 from errors import Error
 from image_utils import tf_distortion_free_resize, load_and_pad_image, augment_image, distortion_free_resize, \
-    IMAGE_WIDTH, IMAGE_HEIGHT
+    IMAGE_WIDTH, IMAGE_HEIGHT, magnie_humie
 from text_utils import Vocabulary, add_voc_args
 
 GROUND_TRUTH_FILENAME = "ground_truth.txt"
@@ -93,19 +94,22 @@ def load_ground_truth_json(
     max_gt_items: int = None
 ) -> GroundTruth:
     with open(path, "r") as f:
-        dd: Dict = json.load(f)
+        try:
+            dd: Dict = json.load(f)
 
-        items = dd.items()
-        if max_gt_items:
-            items = list(items)
-            items = items[:min(max_gt_items, len(items))]
+            items = dd.items()
+            if max_gt_items:
+                items = list(items)
+                items = items[:min(max_gt_items, len(items))]
 
-        return {
-            img_path: ggt
-            for img_path, gt in items
-            for ggt in [GroundTruthPathsItem(**gt)]
-            if not on_sample or on_sample(ggt)
-        }
+            return {
+                img_path: ggt
+                for img_path, gt in items
+                for ggt in [GroundTruthPathsItem(**gt)]
+                if not on_sample or on_sample(ggt)
+            }
+        except JSONDecodeError as e:
+            LOG.warning(f"Unable to decode '{path}': {e}")
 
 
 def save_ground_truth_json(ground_truth: Dict[str, GroundTruthPathsItem], path: Union[str, os.PathLike]):
@@ -292,11 +296,25 @@ def _preprocess_item(
     cache_subdir.mkdir(parents=True, exist_ok=True)
 
     # Apply different sorts of threshold
-    augmentation = augment_image(image, only_threshold)
+    magnie, humie = magnie_humie(image)
+    pre_aug = {
+        "": image,
+        "magnie": magnie,
+        "humie": humie,
+    }
+    augmentation = {}
+    for prefix, pre_aug_image in pre_aug.items():
+        sub_aug = augment_image(pre_aug_image, only_threshold)
 
-    if not only_threshold and ignore_augmentations:
-        for aug in ignore_augmentations:
-            augmentation.pop(aug)
+        if not only_threshold and ignore_augmentations:
+            for aug in ignore_augmentations:
+                sub_aug.pop(aug)
+
+        sub_aug = {
+            f"{prefix}-{name}": augmented
+            for name, augmented in sub_aug.items()
+        }
+        augmentation.update(sub_aug)
 
     res: Dataset = []
 

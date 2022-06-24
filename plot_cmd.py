@@ -47,7 +47,7 @@ def run_plot(img_path: str, roi: ROI, keep: bool):
         ds,
         only_threshold=False, cache_dir=CACHE_DIR_DEFAULT,
         keep=keep,
-        full=True
+        full=False
     )
 
     plot_dataset(ds)
