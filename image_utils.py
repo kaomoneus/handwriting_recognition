@@ -1,10 +1,12 @@
 import logging
 from typing import Tuple, Optional, Dict, Callable
 
-import numpy
+import math
 import numpy as np
 import tensorflow as tf
 import cv2
+from matplotlib import pyplot as plt
+from scipy import interpolate
 
 LOG = logging.getLogger(__name__)
 
@@ -56,7 +58,7 @@ def _image_resize(image, width=None, height=None, inter=cv2.INTER_AREA):
     return resized
 
 
-def distortion_free_resize(image: numpy.ndarray):
+def distortion_free_resize(image: np.ndarray):
     """
     ### Resizing images without distortion
 
@@ -183,39 +185,35 @@ def load_and_pad_image(
 
 
 def magnie_humie(src_img: np.ndarray):
-    splines = cv2.createThinPlateSplineShapeTransformer()
-
     width = src_img.shape[1]
     height = src_img.shape[0]
 
-    def abs_array(a: np.ndarray):
-        a[:, 0] *= width*2
-        a[:, 0] -= width/2
-        a[:, 1] *= height*2
-        a[:, 1] -= height/2
-        return a.reshape(1, -1, 2)
+    maxy = height-1
 
-    source_points = abs_array(numpy.array([
-        [0, 0], [1, 0],
-        [0, 1], [1, 1],
-        [0, 0.3], [1, 0.3],
-        [1, 0.6], [0, 0.6],
-    ], dtype=np.float32))
+    linear_zone = 0.85
+    pixmove = 0.04
 
-    target_points = abs_array(numpy.array([
-        [0, 0], [1, 0],
-        [0, 1], [1, 1],
-        [0, 0.1], [1, 0.1],
-        [1, 0.9], [0, 0.9],
-    ], dtype=np.float32))
+    left_mover = 0.5 - linear_zone/2
+    right_mover = 0.5 + linear_zone/2
 
-    matches = numpy.array([cv2.DMatch(i, i, 0) for i in range(source_points.shape[1])])
+    y_src = np.array([0., left_mover, 0.5, right_mover, 1]) * maxy
+    y_magnie = np.array([0., left_mover+pixmove, 0.5, right_mover-pixmove, 1]) * maxy
+    y_humie = np.array([0., left_mover-pixmove, 0.5, right_mover+pixmove, 1]) * maxy
 
-    splines.estimateTransformation(source_points, target_points, matches)
-    magnie = splines.warpImage(src_img, borderValue=255.)
+    magnie_tck = interpolate.splrep(y_src, y_magnie)
+    humie_tck = interpolate.splrep(y_src, y_humie)
+    y_args = [*map(float, range(height))]
 
-    splines.estimateTransformation(target_points, source_points, matches)
-    humie = splines.warpImage(src_img, borderValue=255.)
+    magnie_map_y = interpolate.splev(y_args, magnie_tck)
+    humie_map_y = interpolate.splev(y_args, humie_tck)
+
+    magnie_map_y = np.array([magnie_map_y]*width, dtype=np.float32).transpose()
+    humie_map_y = np.array([humie_map_y]*width, dtype=np.float32).transpose()
+
+    map_x = np.array([[x for x in range(width)]] * height, np.float32)
+
+    magnie = cv2.remap(src_img, map_x, magnie_map_y, cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=255.)
+    humie = cv2.remap(src_img, map_x, humie_map_y, cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=255.)
 
     return magnie, humie
 

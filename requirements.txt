@@ -7,3 +7,4 @@ tqdm
 opencv-python==4.5.5.62
 opencv-contrib-python==4.5.5.62
 tensorboard
+scipy
