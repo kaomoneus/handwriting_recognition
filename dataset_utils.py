@@ -187,16 +187,19 @@ def load_dataset(
     allowed_characters = set(vocabulary.characters) if vocabulary else None
 
     num_skipped = 0
+    total_loaded = 0
 
     with auto_voc.builder() as characters:
         def on_sample(gt: GroundTruthPathsItem):
-            nonlocal num_skipped
+            nonlocal num_skipped, total_loaded
+
+            total_loaded += 1
+
             skip_msg = f"Skipping word '{gt.str_value}', rendered as '{gt.img_path}': %s"
 
             if whitelist and gt.img_name not in whitelist:
-                # Skipped word means that we skip something from whitelist.
-                # So, don't report this word is skipped.
-                # num_skipped += 1
+                LOG.debug(skip_msg % f"not in whitelist.")
+                num_skipped += 1
                 return False
 
             if len(gt.str_value) > max_word_len:
@@ -236,7 +239,19 @@ def load_dataset(
             res = load_iam_dataset(str_values_file_path, img_dir, on_sample, max_ds_items), auto_voc
         else:
             raise Error(f"Text file is in IAM format, but images directory is not provided")
+        pass
 
+    if not res:
+        raise Error("Final dataset is empty.")
+
+    if whitelist:
+        loaded_items = {gt.img_name for gt in res[0]}
+        for w in whitelist:
+            if w not in loaded_items:
+                LOG.warning(f"Item '{w}' is in whitelist, but not loaded.")
+
+    LOG.info(f"Total samples checked: {total_loaded}")
+    LOG.info(f"Final dataset size: {len(res[0])}")
     LOG.info(f"Total amount of skipped words: {num_skipped}")
     return res
 
@@ -311,7 +326,7 @@ def _preprocess_item(
                 sub_aug.pop(aug)
 
         sub_aug = {
-            f"{prefix}-{name}": augmented
+            (f"{prefix}-{name}" if prefix else name): augmented
             for name, augmented in sub_aug.items()
         }
         augmentation.update(sub_aug)

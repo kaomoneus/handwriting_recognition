@@ -49,7 +49,8 @@ class Vocabulary:
             return self
 
         def __exit__(self, exc_type, exc_val, exc_tb):
-
+            if not self.characters:
+                return
             self.subj.characters = "".join(sorted(self.characters))
             self.subj.max_len = self.max_len
             self.subj.build_convertors()
