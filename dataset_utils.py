@@ -262,25 +262,18 @@ def _preprocess_item(
     only_threshold: bool = False,
     keep_existing_augmentations: bool = False,
     ignore_augmentations: Set[str] = None
-):
+) -> Optional[Tuple[GroundTruthPathsItem, Dataset]]:
+
     img_path = src_item.img_path
     roi = src_item.roi
 
     cache_subdir = Path(cache_dir) / src_item.img_name
     ext = Path(img_path).suffix
 
-    ground_truth_file = cache_subdir / GROUND_TRUTH_FILENAME
-
     if keep_existing_augmentations and cache_subdir.exists():
-        if ground_truth_file.exists():
-            with open(ground_truth_file, "r") as f:
-                str_value = f.readline().strip()
-        else:
-            str_value = ""
-
         res = [
             GroundTruthPathsItem(
-                str_value=str_value,
+                str_value=src_item.str_value,
                 img_name=f.stem,
                 img_path=str(f),
                 roi=None
@@ -369,6 +362,7 @@ def preprocess_dataset(
     """
 
     res: Dataset = []
+    cache_dir = pathlib.Path(cache_dir)
 
     preprocess_args = [dict(
         src_item=d,
