@@ -5,8 +5,9 @@ import logging
 import pathlib
 from typing import List
 
-from config import PLOTI_ROWS, PLOTI_COLS, MARKED_PATH_DEFAULT
-from dataset_utils import load_dataset, load_marked, save_marked, MarkedState
+from config import PLOTI_ROWS, PLOTI_COLS, MARKED_PATH_DEFAULT, CACHE_DIR_DEFAULT
+from dataset_utils import load_dataset, load_marked, save_marked, MarkedState, preprocess_dataset, add_dataset_args, \
+    parse_dataset_args, Dataset
 from plot_utils import plot_interactive
 from text_utils import add_voc_args, parse_voc_args, Vocabulary
 
@@ -15,28 +16,29 @@ LOG = logging.getLogger(__name__)
 
 
 def register_ploti_args(ploti_cmd: argparse.ArgumentParser):
-    ploti_cmd.add_argument("-img", help="Root directory with images", required=True)
-    ploti_cmd.add_argument("-text", help="File with text ground truth", required=True)
     ploti_cmd.add_argument("-state", help="File with current state", default=MARKED_PATH_DEFAULT)
 
     add_voc_args(ploti_cmd)
+    add_dataset_args(ploti_cmd)
 
 
 def handle_ploti_cmd(args: argparse.Namespace):
+    vocabulary = parse_voc_args(args)
+    dataset, _ = parse_dataset_args(args, vocabulary)
+
     run_ploti(
-        img_path=args.img,
-        text_path=args.text,
-        vocabulary=parse_voc_args(args),
+        dataset=dataset,
+        vocabulary=vocabulary,
         state_path=args.state
     )
 
 
-def run_ploti(img_path: str, text_path: str, vocabulary: Vocabulary, state_path: str):
-
-    dataset, _ = load_dataset(
-        str_values_file_path=text_path,
-        img_dir=img_path,
-        vocabulary=vocabulary,
+def run_ploti(dataset: Dataset, vocabulary: Vocabulary, state_path: str):
+    # Resize, threshold and pad samples per network input configuration.
+    dataset = preprocess_dataset(
+        dataset,
+        only_threshold=True,
+        cache_dir=CACHE_DIR_DEFAULT,
     )
 
     current_page = 0
