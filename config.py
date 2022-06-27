@@ -10,8 +10,8 @@ Defines internal format of rendered strings.
 Note, if string is quite short for such aspect ration
 it is supposed to pad such rendered string image.
 """
-IMAGE_WIDTH = 128
-IMAGE_HEIGHT = 32
+IMAGE_WIDTH = 256
+IMAGE_HEIGHT = 64
 PAD_COLOR = 255
 
 
