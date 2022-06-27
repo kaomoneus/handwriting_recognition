@@ -1,0 +1,35 @@
+{
+  "/Users/stepan/drive/doc/projects/seecheck/cheque_samples/uscheck6.jpg": {
+    "str_value": "Ipsum",
+    "img_name": "uscheck6",
+    "img_path": "/Users/stepan/drive/doc/projects/seecheck/cheque_samples/uscheck6.jpg",
+    "roi": [
+      1015,
+      218,
+      82,
+      38
+    ]
+  },
+  "/Users/stepan/Desktop/FormsRecognition/HandwrittenExamples/SomeText.jpg": {
+    "str_value": "Hello",
+    "img_name": "SomeText",
+    "img_path": "/Users/stepan/Desktop/FormsRecognition/HandwrittenExamples/SomeText.jpg",
+    "roi": [
+      254,
+      52,
+      622,
+      284
+    ]
+  },
+  "/Users/stepan/drive/doc/projects/seecheck/cheque_samples/uscheck5.png": {
+    "str_value": "Company",
+    "img_name": "uscheck5",
+    "img_path": "/Users/stepan/drive/doc/projects/seecheck/cheque_samples/uscheck5.png",
+    "roi": [
+      213,
+      89,
+      117,
+      35
+    ]
+  }
+}
