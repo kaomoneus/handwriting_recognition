@@ -15,7 +15,7 @@ from tensorflow import keras
 from tqdm import tqdm
 
 from dataset_utils import Dataset, tf_dataset
-from image_utils import IMAGE_WIDTH, IMAGE_HEIGHT
+from config import IMAGE_WIDTH, IMAGE_HEIGHT
 from text_utils import Vocabulary, PADDING_TOKEN
 
 """
@@ -145,46 +145,7 @@ def train_model(
 
     validation_set_size = len(validation_images)
 
-    def calculate_edit_distance(labels, predictions, vocabulary: Vocabulary):
-        # Get a single batch and convert its labels to sparse tensors.
-        saprse_labels = tf.cast(tf.sparse.from_dense(labels), dtype=tf.int64)
-
-        # Make predictions and convert them to sparse tensors.
-        input_len = np.ones(predictions.shape[0]) * predictions.shape[1]
-        predictions_decoded = tf.keras.backend.ctc_decode(
-            predictions, input_length=input_len, greedy=True
-        )[0][0][:, :vocabulary.max_len]
-        sparse_predictions = tf.cast(
-            tf.sparse.from_dense(predictions_decoded), dtype=tf.int64
-        )
-
-        # Compute individual edit distances and average them out.
-        edit_distances = tf.edit_distance(
-            sparse_predictions, saprse_labels, normalize=False
-        )
-        return tf.reduce_mean(edit_distances)
-
-    class EditDistanceCallback(keras.callbacks.Callback):
-        def __init__(self):
-            super().__init__()
-            self.prediction_model = prediction_model(model)
-
-        def on_epoch_end(self, epoch, logs=None):
-            edit_distances = []
-
-            for i in tqdm(range(validation_set_size), desc=f"Evaluating epoch #{epoch}"):
-                labels = validation_labels[i]
-                predictions = self.prediction_model.predict(
-                    validation_images[i],
-                    verbose=0
-                )
-                edit_distances.append(calculate_edit_distance(labels, predictions, vocabulary).numpy())
-
-            print(
-                f"Mean edit distance for epoch {epoch + 1}: {np.mean(edit_distances):.4f}"
-            )
-
-    edit_distance_callback = EditDistanceCallback()
+    edit_distance_callback = EditDistanceCallback(model, validation_images, validation_labels, vocabulary)
 
     # Train the model.
     history = model.fit(
@@ -251,7 +212,5 @@ class EditDistanceCallback(keras.callbacks.Callback):
 
         med = np.mean(edit_distances)
 
-        LOG.info(
-            f"Mean edit distance for epoch {epoch + 1}: {med:.4f}"
-        )
+        LOG.info(f"Mean edit distance for epoch {epoch + 1}: {med:.4f}")
         tf.summary.scalar("MED", data=med, step=epoch, description="Mean edit distance")
