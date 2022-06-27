@@ -5,7 +5,8 @@ import numpy as np
 from keras.saving.save import load_model
 from tqdm import tqdm
 
-from dataset_utils import add_dataset_args, parse_dataset_args, tf_dataset
+from config import CACHE_DIR_DEFAULT
+from dataset_utils import add_dataset_args, parse_dataset_args, tf_dataset, preprocess_dataset
 from model_utils import prediction_model, calculate_edit_distance
 from plot_utils import tf_plot_predictions
 from text_utils import add_voc_args, parse_voc_args
@@ -21,6 +22,12 @@ def register_eval_cmd(eval_cmd: argparse.ArgumentParser):
         required=True,
         help="Initial model path. If provided then saved model will be loaded."
     )
+    # TODO: Consider making it part of dataset args set.
+    eval_cmd.add_argument(
+        "-preprocess",
+        action="store_true",
+        help="Preprocess input tasks"
+    )
     add_voc_args(eval_cmd)
     add_dataset_args(eval_cmd)
 
@@ -28,6 +35,14 @@ def register_eval_cmd(eval_cmd: argparse.ArgumentParser):
 def handle_eval_cmd(args: argparse.Namespace):
     vocabulary = parse_voc_args(args)
     dataset, _ = parse_dataset_args(args, vocabulary)
+
+    if args.preprocess:
+        dataset = preprocess_dataset(
+            dataset,
+            cache_dir=CACHE_DIR_DEFAULT,
+            only_threshold=False,
+        )
+
     model = load_model(args.initial_model)
     predictor = prediction_model(model)
 
