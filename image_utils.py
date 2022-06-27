@@ -1,5 +1,5 @@
 import logging
-from typing import Tuple, Optional, Dict, Callable
+from typing import Tuple, Optional, Dict, Callable, Set
 
 import math
 import numpy as np
@@ -7,18 +7,9 @@ import tensorflow as tf
 import cv2
 from matplotlib import pyplot as plt
 from scipy import interpolate
+from config import IMAGE_WIDTH, IMAGE_HEIGHT, PAD_COLOR
 
 LOG = logging.getLogger(__name__)
-
-"""
-Defines internal format of rendered strings.
-Note, if string is quite short for such aspect ration
-it is supposed to pad such rendered string image.
-"""
-IMAGE_WIDTH = 128
-IMAGE_HEIGHT = 32
-
-PAD_COLOR = 255
 
 
 def _image_resize(image, width=None, height=None, inter=cv2.INTER_AREA):

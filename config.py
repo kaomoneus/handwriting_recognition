@@ -6,6 +6,16 @@ from pathlib import Path
 
 
 """
+Defines internal format of rendered strings.
+Note, if string is quite short for such aspect ration
+it is supposed to pad such rendered string image.
+"""
+IMAGE_WIDTH = 128
+IMAGE_HEIGHT = 32
+PAD_COLOR = 255
+
+
+"""
 Training batch size
 """
 BATCH_SIZE_DEFAULT = 256

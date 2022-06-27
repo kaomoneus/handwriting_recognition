@@ -40,6 +40,7 @@ class Vocabulary:
 
     class Builder:
         def __init__(self, subj):
+            # TODO: (only) in builder also store characters frequency.
             self.characters = None
             self.max_len = 0
             self.subj = subj
