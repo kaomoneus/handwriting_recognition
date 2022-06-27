@@ -217,7 +217,7 @@ def load_dataset(
                 num_skipped += 1
                 return False
 
-            if allowed_characters:
+            if allowed_characters and apply_ignore_list:
                 disallowed = set(gt.str_value).difference(allowed_characters)
                 if disallowed:
                     LOG.debug(skip_msg % f"contains disallowed characters: {''.join(disallowed)}")
@@ -297,11 +297,30 @@ def _preprocess_item(
     if len(image.shape) == 2:
         image = image.reshape([*image.shape, 1])
 
+    def save_augmentations(augs_dict):
+        res = []
+        for aug_name, aug in augs_dict.items():
+            aug_name = f"{src_item.img_name}-{aug_name}" if aug_name else src_item.img_name
+            dest_path = cache_subdir / f"{aug_name}{ext}"
+            cv2.imwrite(str(dest_path), distortion_free_resize(aug))
+            res.append(GroundTruthPathsItem(
+                str_value=src_item.str_value,
+                img_name=aug_name,
+                img_path=str(dest_path),
+                roi=None
+            ))
+        return res
+
     if roi:
         left, top, width, height = roi
         image = image[top:top+height, left:left+width, :]
 
     cache_subdir.mkdir(parents=True, exist_ok=True)
+
+    if only_threshold:
+        thresh = augment_image(image, only_threshold=True)["threshold"]
+        res = save_augmentations({"": thresh})
+        return src_item, res
 
     # Apply different sorts of threshold
     magnie, humie = magnie_humie(image)
@@ -326,16 +345,7 @@ def _preprocess_item(
 
     res: Dataset = []
 
-    for aug_name, aug in augmentation.items():
-        aug_name = f"{src_item.img_name}-{aug_name}"
-        dest_path = cache_subdir / f"{aug_name}{ext}"
-        cv2.imwrite(str(dest_path), distortion_free_resize(aug))
-        res.append(GroundTruthPathsItem(
-            str_value=src_item.str_value,
-            img_name=aug_name,
-            img_path=str(dest_path),
-            roi=None
-        ))
+    res.extend(save_augmentations(augmentation))
 
     return src_item, res
 
@@ -387,6 +397,7 @@ def preprocess_dataset(
             desc="Preprocessing dataset (async)"
         ):
             apply_preprocess_result(d, gts)
+        res = list(sorted(res, key=lambda gt: gt.img_name))
     else:
         for args in tqdm(preprocess_args, desc="Preprocessing dataset"):
             d, gts = _preprocess_item(**args)
