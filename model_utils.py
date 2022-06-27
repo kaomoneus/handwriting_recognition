@@ -54,6 +54,17 @@ def build_model(vocabulary: Vocabulary):
     input_img = keras.Input(shape=(IMAGE_WIDTH, IMAGE_HEIGHT, 1), name="image")
     labels = keras.layers.Input(name="label", shape=(None,))
 
+    # 0th conv block.
+    x = keras.layers.Conv2D(
+        16,
+        (3, 3),
+        activation="relu",
+        kernel_initializer="he_normal",
+        padding="same",
+        name="Conv0",
+    )(input_img)
+    x = keras.layers.MaxPooling2D((2, 2), name="pool0")(x)
+
     # First conv block.
     x = keras.layers.Conv2D(
         32,
@@ -62,7 +73,7 @@ def build_model(vocabulary: Vocabulary):
         kernel_initializer="he_normal",
         padding="same",
         name="Conv1",
-    )(input_img)
+    )(x)
     x = keras.layers.MaxPooling2D((2, 2), name="pool1")(x)
 
     # Second conv block.
@@ -80,7 +91,7 @@ def build_model(vocabulary: Vocabulary):
     # Hence, downsampled feature maps are 4x smaller. The number of
     # filters in the last layer is 64. Reshape accordingly before
     # passing the output to the RNN part of the model.
-    new_shape = ((IMAGE_WIDTH // 4), (IMAGE_HEIGHT // 4) * 64)
+    new_shape = ((IMAGE_WIDTH // 8), (IMAGE_HEIGHT // 8) * 64)
     x = keras.layers.Reshape(target_shape=new_shape, name="reshape")(x)
     x = keras.layers.Dense(64, activation="relu", name="dense1")(x)
     x = keras.layers.Dropout(0.2)(x)
