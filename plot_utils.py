@@ -259,8 +259,28 @@ def plot_interactive(
     if on_page_changed is None:
         on_page_changed = on_page_change_default
 
+    def change_page(delta: int):
+        nonlocal current_page
+
+        new_current_page = max(0, min(max_page,
+            current_page + delta
+        ))
+
+        if new_current_page != current_page:
+            on_page_changed(new_current_page, dataset[samples_per_page * new_current_page].img_name)
+            current_page = new_current_page
+            plot_current_page()
+            plt.show()
+
     def on_mouse_click(event: MouseEvent):
         if event.dblclick:
+            return
+
+        if event.button == plt.MouseButton.RIGHT:
+            change_page(+1)
+            return
+        if event.button == plt.MouseButton.MIDDLE:
+            change_page(-1)
             return
 
         if event.inaxes is None:
@@ -281,19 +301,12 @@ def plot_interactive(
         key = event.key
         LOG.info(f"Key pressed: {key}")
 
-        new_current_page = current_page
         if key in {"right", "]"}:
-            new_current_page = min(current_page + 1, max_page)
+            change_page(+1)
         elif key in {"left", "["}:
-            new_current_page = max(current_page - 1, 0)
+            change_page(-1)
         elif key in {"cmd+s"} and on_save is not None:
             on_save(current_page, dataset[samples_per_page * current_page].img_name)
-
-        if new_current_page != current_page:
-            on_page_changed(new_current_page, dataset[samples_per_page * new_current_page].img_name)
-            current_page = new_current_page
-            plot_current_page()
-            plt.show()
 
     subplots = make_subplots(
         onclick=on_mouse_click,
