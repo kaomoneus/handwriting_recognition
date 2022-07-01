@@ -3,6 +3,7 @@
 You will notice that the content of original image is kept as faithful as possible and has
 been padded accordingly.
 """
+import gc
 import logging
 from typing import Tuple
 
@@ -157,13 +158,14 @@ def train_model(
     validation_set_size = len(validation_images)
 
     edit_distance_callback = EditDistanceCallback(model, validation_images, validation_labels, vocabulary)
+    clear_callback = ClearMemory()
 
     # Train the model.
     history = model.fit(
         tf_train_ds,
         validation_data=tf_validation_ds,
         epochs=epochs,
-        callbacks=[edit_distance_callback],
+        callbacks=[edit_distance_callback, clear_callback],
     )
 
     return history
@@ -225,3 +227,9 @@ class EditDistanceCallback(keras.callbacks.Callback):
 
         LOG.info(f"Mean edit distance for epoch {epoch + 1}: {med:.4f}")
         tf.summary.scalar("MED", data=med, step=epoch, description="Mean edit distance")
+
+
+class ClearMemory(keras.callbacks.Callback):
+    def on_epoch_end(self, epoch, logs=None):
+        gc.collect()
+        clear_session()
