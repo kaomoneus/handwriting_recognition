@@ -121,7 +121,7 @@ def build_model(vocabulary: Vocabulary):
     # Optimizer.
     opt = keras.optimizers.Adam()
     # Compile the model and return.
-    model.compile(optimizer=opt)
+    model.compile(optimizer=opt, run_eagerly=True)
     return model
 
 
