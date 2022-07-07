@@ -5,11 +5,12 @@ been padded accordingly.
 """
 import gc
 import logging
-from typing import Tuple
+from typing import Tuple, Iterable
 
 import numpy as np
 import tensorflow as tf
 import tensorflow.python.data
+from keras import Model
 from keras.backend import clear_session
 from keras.saving.save import load_model
 from tensorflow import keras
@@ -167,6 +168,85 @@ def train_model(
         epochs=epochs,
         callbacks=[edit_distance_callback, clear_callback],
     )
+
+    return history
+
+
+def fit_manual(
+    model: Model,
+    epochs,
+    train_dataset,
+    callbacks: Iterable[keras.callbacks.Callback]
+):
+    """
+    Manual model training.
+    The background and reason for this method is a big RAM consumption
+    when training with GPU. Google colab rejects my set.
+    https://github.com/tensorflow/tensorflow/issues/31312#issuecomment-821809246
+    :param model:
+    :param epochs:
+    :param train_dataset:
+    :param callbacks:
+    :return:
+    """
+
+    opt = keras.optimizers.Adam()
+
+    history = []
+
+    for cb in callbacks:
+        cb.set_model(model)
+        cb.on_train_begin()
+
+    for epoch in range(epochs):
+
+        LOG.info(f"Training epoch #{epoch}")
+
+        for cb in callbacks:
+            cb.on_epoch_begin(epoch)
+
+        batch_progress = tqdm(train_dataset, desc="Epoch progress")
+
+        # Iterate over the batches of the dataset.
+        for step, batch in enumerate(batch_progress):
+            # Batch contents might be described with following two code lines:
+            # x_batch_train = batch["image"]
+            # y_batch_train = batch["label"]
+
+            for cb in callbacks:
+                cb.on_train_batch_begin(step)
+
+            # Open a GradientTape to record the operations run
+            # during the forward pass, which enables auto-differentiation.
+            with tf.GradientTape() as tape:
+
+                # Each loss sample has shape <LSTM sequence length, number of vocabulary items>
+                # also we add another dimension, since it goes in batch.
+                _ = model(batch, training=True)
+                loss_values = model.losses
+                loss_value = float(tensorflow.reduce_mean(loss_values).numpy())
+
+            # Use the gradient tape to automatically retrieve
+            # the gradients of the trainable variables with respect to the loss.
+            grads = tape.gradient(loss_values, model.trainable_weights)
+
+            # Run one step of gradient descent by updating
+            # the value of the variables to minimize the loss.
+            opt.apply_gradients(zip(grads, model.trainable_weights))
+            batch_progress.set_postfix(dict(
+                loss=loss_value
+            ))
+
+            history.append(loss_value)
+
+            for cb in callbacks:
+                cb.on_train_batch_end(step)
+
+        for cb in callbacks:
+            cb.on_epoch_end(epoch)
+
+    for cb in callbacks:
+        cb.on_train_end()
 
     return history
 

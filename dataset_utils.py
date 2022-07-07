@@ -387,7 +387,7 @@ def preprocess_dataset(
             res.append(d)
         res.extend(gts)
 
-    if len(ds) > 10000:
+    if len(ds) > 20000:
         LOG.info("Launching DS preprocessing pool...")
         pool = Pool(processes=(os.cpu_count() * 4))
 

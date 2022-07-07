@@ -16,7 +16,7 @@ from config import CACHE_DIR_DEFAULT, TRAIN_EPOCHS_DEFAULT, TRAIN_TEST_RATIO, TR
     TENSORBOARD_LOGS_DEFAULT, BATCH_SIZE_DEFAULT
 from dataset_utils import Dataset, tf_dataset, load_dataset, preprocess_dataset, load_marked, parse_dataset_args, \
     add_dataset_args, save_marked, MarkedState
-from model_utils import build_model, EditDistanceCallback
+from model_utils import build_model, EditDistanceCallback, ClearMemory, fit_manual
 from plot_utils import tf_plot_predictions, plot_interactive
 from text_utils import Vocabulary, add_voc_args, parse_voc_args
 
@@ -107,6 +107,7 @@ def train_model(
         validation_images, validation_labels,
         vocabulary
     )
+    clear_callback = ClearMemory()
 
     log_dir = pathlib.Path(TENSORBOARD_LOGS_DEFAULT) / datetime.now().strftime("%Y%m%d-%H%M%S")
     tensorboard_callback = TensorBoard(log_dir=str(log_dir), histogram_freq=1)
@@ -114,11 +115,15 @@ def train_model(
     file_writer.set_as_default()
 
     # Train the model.
-    history = model.fit(
-        tf_train_ds,
-        validation_data=tf_validation_ds,
-        epochs=epochs,
-        callbacks=[edit_distance_callback, tensorboard_callback],
+    # history = model.fit(
+    #     tf_train_ds,
+    #     validation_data=tf_validation_ds,
+    #     epochs=epochs,
+    #     callbacks=[edit_distance_callback, tensorboard_callback, clear_callback],
+    # )
+    history = fit_manual(
+        model, epochs, tf_train_ds,
+        callbacks=[edit_distance_callback, clear_callback, tensorboard_callback]
     )
 
     return history
