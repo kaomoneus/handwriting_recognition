@@ -153,6 +153,7 @@ def tf_distortion_free_resize(image):
 def load_and_pad_image(
     image_path: str,
     roi: Tuple[int, int, int, int] = None,
+    pad_resize: bool = True
 ) -> Optional[np.ndarray]:
     try:
         image: np.ndarray = cv2.imread(image_path, flags=cv2.IMREAD_GRAYSCALE)
@@ -170,7 +171,8 @@ def load_and_pad_image(
         left, top, width, height = roi
         image = image[top:top+height, left:left+width, :]
 
-    image = distortion_free_resize(image)
+    if pad_resize:
+        image = distortion_free_resize(image)
 
     return image
 
