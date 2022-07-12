@@ -1,3 +1,4 @@
+import copy
 import dataclasses
 import json
 import logging
@@ -7,7 +8,7 @@ from json import JSONDecodeError
 from multiprocessing import Pool
 from os import listdir
 from pathlib import Path
-from typing import List, Dict, Tuple, Optional, Set, Iterable, Union, Callable
+from typing import List, Dict, Tuple, Optional, Set, Union, Callable
 
 import cv2
 import numpy as np
@@ -15,11 +16,18 @@ import tensorflow as tf
 from tensorflow.python.data import AUTOTUNE
 from tqdm import tqdm
 
+from common import Rect, GroundTruthPathsItem, Word, Line, update_min
 from config import BATCH_SIZE_DEFAULT, MAX_WORD_LEN_DEFAULT
 from errors import Error
-from image_utils import tf_distortion_free_resize, load_and_pad_image, augment_image, distortion_free_resize, \
-    IMAGE_WIDTH, IMAGE_HEIGHT, magnie_humie
-from text_utils import Vocabulary, add_voc_args
+from image_utils import tf_distortion_free_resize, augment_image, distortion_free_resize, \
+    magnie_humie, load_and_pad_image
+from text_utils import Vocabulary
+import xml.dom.minidom
+from xml.dom.minidom import Document
+
+
+PUNCTUATIONS = {",", ".", '?', "!", ":", ";"}
+
 
 GROUND_TRUTH_FILENAME = "ground_truth.txt"
 
@@ -29,30 +37,6 @@ VALUE_IDX = 8
 LOG = logging.getLogger(__name__)
 
 ROI = Tuple[int, int, int, int]
-
-
-@dataclasses.dataclass
-class GroundTruthPathsItem:
-    """
-    Ground truth value
-    """
-    str_value: str
-
-    """
-    Unique image name
-    """
-    img_name: str
-
-    """
-    Full path to rendered value
-    """
-    img_path: str
-
-    """
-    Region of interest
-    """
-    roi: Optional[ROI] = None
-
 
 Dataset = List[GroundTruthPathsItem]
 GroundTruth = Dict[str, GroundTruthPathsItem]
@@ -76,6 +60,138 @@ def _get_img_locs_recursive(
         else:
             di_noext = di.split(".")[0]
             res[di_noext] = di_full
+
+    return res
+
+
+def make_lines_dataset(
+    lines_root: pathlib.Path,
+    forms_xml_root: pathlib.Path,
+    forms_img_root: pathlib.Path,
+    blacklisted_words: Set[str],
+) -> Dataset:
+    """
+    Loads forms information (lines, words), and renders it into lines
+    skipping blacklisted words
+    :param lines_root: directory where rendered lines will be saved
+    :param forms_xml_root: directory which holds form XML files
+    :param forms_img_root: directory which holds form image files
+    :param blacklisted_words: set of blacklisted words
+    :return: dataset with lines
+    """
+
+    def _get_words(line_node: xml.dom.Node) -> Dict[str, Word]:
+        words = {
+            node.getAttribute("id"):
+            Word(
+                node.getAttribute("id"),
+                node.getAttribute("text"),
+                [
+                    Rect(
+                        rect_node.getAttribute("x"),
+                        rect_node.getAttribute("y"),
+                        rect_node.getAttribute("width"),
+                        rect_node.getAttribute("height"),
+                    )
+                    for rect_node in node.getElementsByTagName("cmp")
+                ]
+            )
+            for node in line_node.getElementsByTagName("word")
+        }
+        return words
+
+    def _get_lines(form_path: pathlib.Path) -> Dict[str, Line]:
+        dom: Document = xml.dom.minidom.parse(str(form_path))
+        lines_dom = {
+            node.getAttribute("id"): Line(
+                node.getAttribute("text"),
+                _get_words(node)
+            )
+            for node in dom.getElementsByTagName("line")
+        }
+        return lines_dom
+
+    def _render_rois(
+        dest_img_path: Path, form_img: np.ndarray, rois_new_old: List[Tuple[Rect, Rect]]
+    ):
+        rois, rois_old = list(zip(*rois_new_old))
+
+        left = rois[0].x
+        right = rois[-1].width + rois[-1].x
+
+        top, bottom = None, None
+
+        for roi in rois:
+            top = update_min(top, roi.y)
+            bottom = update_min(bottom, roi.y)
+
+        res = np.full([bottom - top, right - left], 255, np.int8)
+
+        for roi_new, roi_old in rois_new_old:
+            w_img = form_img[
+                roi_old.x: roi_old.x + roi_old.width,
+                roi_old.y: roi_old.y + roi_old.height
+            ]
+
+            new_x = roi_new.x - left
+            new_y = roi_new.y - right
+            res[
+                new_x: new_x + roi_new.width,
+                new_y: new_y + roi_new.height
+            ] = w_img
+
+        cv2.imwrite(dest_img_path, res)
+
+    res: Dataset = []
+
+    dir_items: List[pathlib.Path] = list(map(pathlib.Path, listdir(forms_xml_root)))
+    locs = {
+        pathlib.Path(item): (forms_img_root / item.name).with_suffix(".png")
+        for item in dir_items
+    }
+
+    total_skipped_words = 0
+    total_skipped_lines = 0
+    for form_xml, form_img_path in locs.items():
+        form_img = load_and_pad_image(form_img_path, pad_resize=False)
+        lines: Dict[str, Line] = _get_lines(form_xml)
+        for ln_id, ln in lines.items():
+            num_skipped = 0
+            strikeout_offset = 0
+            str_value = []
+            words_to_render: List[Tuple[Rect, Rect]] = []
+            for word_id, word in ln.words.items():
+                if word_id in blacklisted_words:
+                    strikeout_offset += word.get_width()
+                    total_skipped_words += 1
+                    continue
+                if word.text not in PUNCTUATIONS:
+                    str_value.append(" ")
+                old_rect = word.get_rect()
+                new_rect = copy.copy(old_rect)
+                new_rect.x -= strikeout_offset
+                words_to_render.append((new_rect, old_rect))
+                str_value.append(word.text)
+
+            if words_to_render:
+                str_value = "".join(str_value)
+                line_img_path = (lines_root / ln_id).with_suffix(".png")
+                _render_rois(line_img_path, form_img, words_to_render)
+
+                LOG.debug(f"Adding:")
+                LOG.debug(f"    Value: {str_value}")
+                LOG.debug(f"    Path: {form_img_path}")
+                LOG.debug(f"    Num words skipped: {num_skipped}")
+                res.append(GroundTruthPathsItem(
+                    str_value=str_value,
+                    img_name=ln_id,
+                    img_path=str(line_img_path),
+                ))
+            else:
+                total_skipped_lines += 1
+
+    LOG.debug(f"    Total words skipped: {total_skipped_words}")
+    LOG.debug(f"    Total lines skipped: {total_skipped_lines}")
 
     return res
 

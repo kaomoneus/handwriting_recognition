@@ -5,7 +5,8 @@ from typing import Tuple
 from keras.saving.save import load_model
 
 from config import CACHE_DIR_DEFAULT
-from dataset_utils import GroundTruthPathsItem, ROI, preprocess_dataset
+from dataset_utils import ROI, preprocess_dataset
+from common import GroundTruthPathsItem
 from plot_utils import tf_plot_predictions, plot_dataset
 from text_utils import load_vocabulary
 
