@@ -2,11 +2,11 @@ import argparse
 import logging
 
 from errors import Error
-from eval_cmd import register_eval_cmd, handle_eval_cmd
-from plot_cmd import handle_plot_cmd, register_plot_args
-from ploti_cmd import register_ploti_args, handle_ploti_cmd
-from recognize_cmd import register_recognize_args, handle_recognize_cmd
-from train_cmd import handle_train_cmd, register_train_args
+from commands.eval_cmd import register_eval_cmd, handle_eval_cmd
+from commands.plot_cmd import handle_plot_cmd, register_plot_args
+from commands.ploti_cmd import register_ploti_args, handle_ploti_cmd
+from commands.recognize_cmd import register_recognize_args, handle_recognize_cmd
+from commands.train_cmd import handle_train_cmd, register_train_args
 
 LOG = logging.getLogger(__name__)
 
