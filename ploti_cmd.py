@@ -1,15 +1,12 @@
 import argparse
-import dataclasses
-import json
 import logging
 import pathlib
-from typing import List
 
 from config import PLOTI_ROWS, PLOTI_COLS, MARKED_PATH_DEFAULT, CACHE_DIR_DEFAULT
-from dataset_utils import load_dataset, load_marked, save_marked, MarkedState, preprocess_dataset, add_dataset_args, \
+from utils.dataset_utils import load_marked, save_marked, MarkedState, preprocess_dataset, add_dataset_args, \
     parse_dataset_args, Dataset
-from plot_utils import plot_interactive
-from text_utils import add_voc_args, parse_voc_args, Vocabulary
+from utils.plot_utils import plot_interactive
+from utils.text_utils import add_voc_args, parse_voc_args, Vocabulary
 
 
 LOG = logging.getLogger(__name__)

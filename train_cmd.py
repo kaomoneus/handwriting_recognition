@@ -3,22 +3,20 @@ import logging
 import pathlib
 import random
 from datetime import datetime
-from pathlib import Path
 from typing import Optional
 
 import tensorflow as tf
 from keras.callbacks import TensorBoard
 from keras.saving.save import load_model
 from tensorflow import keras
-from tqdm import tqdm
 
 from config import CACHE_DIR_DEFAULT, TRAIN_EPOCHS_DEFAULT, TRAIN_TEST_RATIO, TRAIN_VALIDATE_CNT, DATASET_SHUFFLER_SEED, \
     TENSORBOARD_LOGS_DEFAULT, BATCH_SIZE_DEFAULT
-from dataset_utils import Dataset, tf_dataset, load_dataset, preprocess_dataset, load_marked, parse_dataset_args, \
+from utils.dataset_utils import Dataset, tf_dataset, preprocess_dataset, parse_dataset_args, \
     add_dataset_args, save_marked, MarkedState
-from model_utils import build_model, EditDistanceCallback, ClearMemory, fit_manual
-from plot_utils import tf_plot_predictions, plot_interactive
-from text_utils import Vocabulary, add_voc_args, parse_voc_args
+from utils.model_utils import build_model, EditDistanceCallback, ClearMemory, fit_manual
+from utils.plot_utils import tf_plot_predictions, plot_interactive
+from utils.text_utils import Vocabulary, add_voc_args, parse_voc_args
 
 LOG = logging.getLogger(__name__)
 

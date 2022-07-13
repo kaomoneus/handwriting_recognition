@@ -1,6 +1,6 @@
 import sys
 
-from log_utils import init_logging
+from utils.log_utils import init_logging
 
 if __name__ == "__main__":
     init_logging()

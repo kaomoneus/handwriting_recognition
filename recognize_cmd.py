@@ -1,14 +1,13 @@
 import argparse
 from pathlib import Path
-from typing import Tuple
 
 from keras.saving.save import load_model
 
 from config import CACHE_DIR_DEFAULT
-from dataset_utils import ROI, preprocess_dataset, tf_dataset
-from common import GroundTruthPathsItem
-from plot_utils import tf_plot_predictions
-from text_utils import load_vocabulary, add_voc_args, parse_voc_args, Vocabulary
+from utils.dataset_utils import ROI, preprocess_dataset, tf_dataset
+from utils.common import GroundTruthPathsItem
+from utils.plot_utils import tf_plot_predictions
+from utils.text_utils import add_voc_args, parse_voc_args, Vocabulary
 
 
 def register_recognize_args(recognize_cmd: argparse.ArgumentParser):

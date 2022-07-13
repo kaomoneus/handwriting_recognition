@@ -6,12 +6,10 @@ from keras.saving.save import load_model
 from tqdm import tqdm
 
 from config import CACHE_DIR_DEFAULT
-from dataset_utils import add_dataset_args, parse_dataset_args, tf_dataset, preprocess_dataset
-from model_utils import prediction_model, calculate_edit_distance
-from plot_utils import tf_plot_predictions
-from text_utils import add_voc_args, parse_voc_args
-import tensorflow as tf
-
+from utils.dataset_utils import add_dataset_args, parse_dataset_args, tf_dataset, preprocess_dataset
+from utils.model_utils import prediction_model, calculate_edit_distance
+from utils.plot_utils import tf_plot_predictions
+from utils.text_utils import add_voc_args, parse_voc_args
 
 LOG = logging.getLogger()
 

@@ -2,7 +2,7 @@ import dataclasses
 import itertools
 from typing import Optional, List, Dict
 
-from dataset_utils import ROI
+from utils.dataset_utils import ROI
 
 
 @dataclasses.dataclass

@@ -24,7 +24,7 @@ class TqdmLoggingHandler(logging.Handler):
 
 
 def init_logging():
-    log_config_path = "log.yaml"
+    log_config_path = "../log.yaml"
     log_config = None
     if exists(log_config_path):
         with open(log_config_path) as flog:
