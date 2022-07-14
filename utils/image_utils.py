@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 from typing import Tuple, Optional, Dict, Callable, Set
 
 import math
@@ -151,12 +152,12 @@ def tf_distortion_free_resize(image):
 
 
 def load_and_pad_image(
-    image_path: str,
+    image_path: Path,
     roi: Tuple[int, int, int, int] = None,
     pad_resize: bool = True
 ) -> Optional[np.ndarray]:
     try:
-        image: np.ndarray = cv2.imread(image_path, flags=cv2.IMREAD_GRAYSCALE)
+        image: np.ndarray = cv2.imread(str(image_path), flags=cv2.IMREAD_GRAYSCALE)
         if image is None:
             LOG.warning(f"Unable to load '{image_path}'")
             return None

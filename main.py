@@ -1,6 +1,7 @@
 import argparse
 import logging
 
+from commands import mk_lines_cmd
 from errors import Error
 from commands.eval_cmd import register_eval_cmd, handle_eval_cmd
 from commands.plot_cmd import handle_plot_cmd, register_plot_args
@@ -31,6 +32,12 @@ def main():
         recognize_cmd = subparsers.add_parser("recognize", help="Runs text recognition")
         register_recognize_args(recognize_cmd)
 
+        mk_lines_command = subparsers.add_parser(
+            "mk-lines",
+            help="Renders lines, taking into account blacklisted words"
+        )
+        mk_lines_cmd.register(mk_lines_command)
+
         args = parser.parse_args()
 
         if args.cmd == "eval":
@@ -43,6 +50,8 @@ def main():
             handle_plot_cmd(args)
         elif args.cmd == "ploti":
             handle_ploti_cmd(args)
+        elif args.cmd == "mk-lines":
+            mk_lines_cmd.handle(args)
 
         return 0
 

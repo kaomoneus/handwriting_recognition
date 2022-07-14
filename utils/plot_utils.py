@@ -10,9 +10,9 @@ import tensorflow
 import tensorflow as tf
 from matplotlib.backend_bases import MouseEvent, KeyEvent
 
-from dataset_utils import Dataset, ROI
-from model_utils import prediction_model
-from text_utils import Vocabulary, PADDING_TOKEN
+from utils.common import ROI, Dataset
+from utils.model_utils import prediction_model
+from utils.text_utils import Vocabulary, PADDING_TOKEN
 
 LOG = logging.getLogger()
 

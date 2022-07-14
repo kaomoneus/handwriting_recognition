@@ -4,7 +4,8 @@ import pathlib
 
 from config import PLOTI_ROWS, PLOTI_COLS, MARKED_PATH_DEFAULT, CACHE_DIR_DEFAULT
 from utils.dataset_utils import load_marked, save_marked, MarkedState, preprocess_dataset, add_dataset_args, \
-    parse_dataset_args, Dataset
+    parse_dataset_args
+from utils.common import Dataset
 from utils.plot_utils import plot_interactive
 from utils.text_utils import add_voc_args, parse_voc_args, Vocabulary
 

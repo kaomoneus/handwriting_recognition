@@ -16,9 +16,10 @@ from keras.saving.save import load_model
 from tensorflow import keras
 from tqdm import tqdm
 
-from dataset_utils import Dataset, tf_dataset
+from utils.dataset_utils import tf_dataset
+from utils.common import Dataset
 from config import IMAGE_WIDTH, IMAGE_HEIGHT
-from text_utils import Vocabulary, PADDING_TOKEN
+from utils.text_utils import Vocabulary, PADDING_TOKEN
 
 """
 ## Model

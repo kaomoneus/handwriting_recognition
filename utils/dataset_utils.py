@@ -1,14 +1,18 @@
+import argparse
 import copy
 import dataclasses
 import json
 import logging
 import os
 import pathlib
+import xml.dom.minidom
+from enum import Enum, auto
 from json import JSONDecodeError
 from multiprocessing import Pool
 from os import listdir
 from pathlib import Path
 from typing import List, Dict, Tuple, Optional, Set, Union, Callable
+from xml.dom.minidom import Document
 
 import cv2
 import numpy as np
@@ -16,15 +20,12 @@ import tensorflow as tf
 from tensorflow.python.data import AUTOTUNE
 from tqdm import tqdm
 
-from common import Rect, GroundTruthPathsItem, Word, Line, update_min
 from config import BATCH_SIZE_DEFAULT, MAX_WORD_LEN_DEFAULT
 from errors import Error
-from image_utils import tf_distortion_free_resize, augment_image, distortion_free_resize, \
+from utils.common import Rect, GroundTruthPathsItem, Word, Line, ROI, Dataset, GroundTruth, Point
+from utils.image_utils import tf_distortion_free_resize, augment_image, distortion_free_resize, \
     magnie_humie, load_and_pad_image
-from text_utils import Vocabulary
-import xml.dom.minidom
-from xml.dom.minidom import Document
-
+from utils.text_utils import Vocabulary
 
 PUNCTUATIONS = {",", ".", '?', "!", ":", ";"}
 
@@ -36,10 +37,11 @@ VALUE_IDX = 8
 
 LOG = logging.getLogger(__name__)
 
-ROI = Tuple[int, int, int, int]
 
-Dataset = List[GroundTruthPathsItem]
-GroundTruth = Dict[str, GroundTruthPathsItem]
+class GTFormat(Enum):
+    IAM_ASCII = auto()
+    IAM_XML = auto()
+    JSON = auto()
 
 
 def get_img_locs(img_dir: str) -> Dict[str, str]:
@@ -68,7 +70,7 @@ def make_lines_dataset(
     lines_root: pathlib.Path,
     forms_xml_root: pathlib.Path,
     forms_img_root: pathlib.Path,
-    blacklisted_words: Set[str],
+    filter: Callable[[GroundTruthPathsItem], bool] = None,
 ) -> Dataset:
     """
     Loads forms information (lines, words), and renders it into lines
@@ -80,24 +82,23 @@ def make_lines_dataset(
     :return: dataset with lines
     """
 
-    def _get_words(line_node: xml.dom.Node) -> Dict[str, Word]:
-        words = {
-            node.getAttribute("id"):
+    def _get_words(line_node: xml.dom.Node) -> List[Word]:
+        words = [
             Word(
                 node.getAttribute("id"),
                 node.getAttribute("text"),
                 [
                     Rect(
-                        rect_node.getAttribute("x"),
-                        rect_node.getAttribute("y"),
-                        rect_node.getAttribute("width"),
-                        rect_node.getAttribute("height"),
+                        int(rect_node.getAttribute("x")),
+                        int(rect_node.getAttribute("y")),
+                        int(rect_node.getAttribute("width")),
+                        int(rect_node.getAttribute("height")),
                     )
                     for rect_node in node.getElementsByTagName("cmp")
                 ]
             )
             for node in line_node.getElementsByTagName("word")
-        }
+        ]
         return words
 
     def _get_lines(form_path: pathlib.Path) -> Dict[str, Line]:
@@ -112,35 +113,48 @@ def make_lines_dataset(
         return lines_dom
 
     def _render_rois(
-        dest_img_path: Path, form_img: np.ndarray, rois_new_old: List[Tuple[Rect, Rect]]
+        dest_img_path: Path,
+        form_img: np.ndarray,
+        rois_new_old: List[Tuple[Point, Rect]]
     ):
-        rois, rois_old = list(zip(*rois_new_old))
+        new_positions, rois_old = list(zip(*rois_new_old))
 
-        left = rois[0].x
-        right = rois[-1].width + rois[-1].x
+        left = new_positions[0].x
+        top = min(new_positions, key=lambda pt: pt.y).y
 
-        top, bottom = None, None
+        right_pt = max(rois_new_old, key=lambda pt: pt[0].x + pt[1].width)
+        right = right_pt[0].x + right_pt[1].width
 
-        for roi in rois:
-            top = update_min(top, roi.y)
-            bottom = update_min(bottom, roi.y)
+        bottom_pt = max(rois_new_old, key=lambda pt: pt[0].y + pt[1].height)
+        bottom = bottom_pt[0].y + bottom_pt[1].height
 
-        res = np.full([bottom - top, right - left], 255, np.int8)
+        res = np.full([bottom - top, right - left], 255, np.uint8)
 
-        for roi_new, roi_old in rois_new_old:
-            w_img = form_img[
-                roi_old.x: roi_old.x + roi_old.width,
-                roi_old.y: roi_old.y + roi_old.height
+        for new_pos, roi_old in rois_new_old:
+            new_x, new_y = new_pos.to_vec()
+            old_x, old_y, width, height = roi_old.to_vec()
+
+            w_img = form_img[old_y: old_y + height, old_x: old_x + width]
+
+            render_x = new_x - left
+            render_y = new_y - top
+
+            dest = res[
+                render_y: render_y + height,
+                render_x: render_x + width,
             ]
 
-            new_x = roi_new.x - left
-            new_y = roi_new.y - right
+            if w_img.shape != dest.shape:
+                print(f"Dest image: {dest_img_path}")
+                print(f"crop shape: {w_img.shape}, dest shape: {dest.shape}")
+                assert False
+
             res[
-                new_x: new_x + roi_new.width,
-                new_y: new_y + roi_new.height
+                render_y: render_y + height,
+                render_x: render_x + width,
             ] = w_img
 
-        cv2.imwrite(dest_img_path, res)
+        cv2.imwrite(str(dest_img_path), res)
 
     res: Dataset = []
 
@@ -152,25 +166,50 @@ def make_lines_dataset(
 
     total_skipped_words = 0
     total_skipped_lines = 0
-    for form_xml, form_img_path in locs.items():
+    for form_xml, form_img_path in tqdm(locs.items(), desc="Processing forms"):
+        if not form_img_path.exists():
+            continue
         form_img = load_and_pad_image(form_img_path, pad_resize=False)
-        lines: Dict[str, Line] = _get_lines(form_xml)
+        if form_img is None:
+            continue
+        form_img = form_img.reshape(form_img.shape[:-1])
+        lines: Dict[str, Line] = _get_lines(forms_xml_root / form_xml)
         for ln_id, ln in lines.items():
             num_skipped = 0
+            first_skipped_before: Optional[Word] = None
             strikeout_offset = 0
             str_value = []
-            words_to_render: List[Tuple[Rect, Rect]] = []
-            for word_id, word in ln.words.items():
-                if word_id in blacklisted_words:
-                    strikeout_offset += word.get_width()
+            words_to_render: List[Tuple[Point, Rect]] = []
+            for i, word in enumerate(ln.words):
+                if not word.glyphs:
+                    continue
+
+                word_gt_item = GroundTruthPathsItem(
+                    str_value=word.text,
+                    img_name=word.word_id,
+                    img_path=form_img_path,
+                    roi=word.get_rect().to_vec()
+                )
+
+                passed = filter(word_gt_item)
+
+                if not passed:
+                    if first_skipped_before is None:
+                        first_skipped_before = word
                     total_skipped_words += 1
                     continue
-                if word.text not in PUNCTUATIONS:
+
+                elif first_skipped_before is not None:
+                    strikeout_offset += word.get_left() - first_skipped_before.get_left()
+                    first_skipped_before = None
+
+                if words_to_render and word.text not in PUNCTUATIONS:
                     str_value.append(" ")
+
                 old_rect = word.get_rect()
-                new_rect = copy.copy(old_rect)
-                new_rect.x -= strikeout_offset
-                words_to_render.append((new_rect, old_rect))
+                new_x = old_rect.x - strikeout_offset
+                assert new_x >= 0
+                words_to_render.append((Point(new_x, old_rect.y), old_rect))
                 str_value.append(word.text)
 
             if words_to_render:
@@ -271,8 +310,76 @@ def load_iam_dataset(
     return res
 
 
+@dataclasses.dataclass()
+class WordsFilter:
+    """
+    Image names which are blacklisted
+    """
+    blacklist: Set[str] = None
+
+    """
+    Image names which are whitelisted
+    """
+    whitelist: Set[str] = None
+
+    """
+    Ground-truth values to be ignored
+    """
+    ignore_list: Set[str] = None
+
+    """
+    Characters which are allowed
+    """
+    allowed_characters: Set[str] = None
+
+    max_word_len: int = 0
+    max_ds_items: int = 0
+    num_skipped: int = 0
+    total_loaded: int = 0
+
+    def __call__(self, gt: GroundTruthPathsItem):
+        self.total_loaded += 1
+
+        skip_msg = f"Skipping word '{gt.str_value}', rendered as '{gt.img_path}': %s"
+
+        if self.whitelist and gt.img_name not in self.whitelist:
+            LOG.debug(skip_msg % f"not in whitelist.")
+            self.num_skipped += 1
+            return False
+
+        if self.max_word_len and len(gt.str_value) > self.max_word_len:
+            LOG.debug(skip_msg % f"exceeds max length {self.max_word_len} characters.")
+            self.num_skipped += 1
+            return False
+
+        if self.ignore_list and gt.str_value in self.ignore_list:
+            LOG.debug(skip_msg % "is in ignore list")
+            self.num_skipped += 1
+            return False
+
+        if self.blacklist and gt.img_name in self.blacklist:
+            LOG.debug(skip_msg % "is in blacklist")
+            self.num_skipped += 1
+            return False
+
+        if self.allowed_characters:
+            disallowed = set(gt.str_value).difference(self.allowed_characters)
+            if disallowed:
+                LOG.debug(skip_msg % f"contains disallowed characters: {''.join(disallowed)}")
+                self.num_skipped += 1
+                return False
+
+        if os.path.getsize(gt.img_path) == 0:
+            LOG.debug(skip_msg % "image is empty")
+            self.num_skipped += 1
+            return False
+
+        return True
+
+
 def load_dataset(
-    str_values_file_path: str,
+    gt_format: GTFormat,
+    gt_path: str,
     img_dir: str,
     vocabulary: Optional[Vocabulary] = None,
     apply_ignore_list: bool = False,
@@ -286,12 +393,13 @@ def load_dataset(
     We could use internal tensorflow format, it it might be stored out
     of python context (in native part). In this case it might be hard to check
     its contents during debug.
-    :param str_values_file_path: path to ground truth values (IAM ASCII format)
+    :param gt_path: path to ground truth values (IAM ASCII format)
     :param img_dir: root path to images directory.
     :param vocabulary: vocabulary if provided, then it will be used to filter
        words which are too long, or which use inappropriate characters
     :param apply_ignore_list: apply ignore list from vocabulary
     :param blacklist: set of blacklisted dataset items
+    :param whitelist: set of explicitly whitelisted dataset items
     :param max_ds_items: dataset size limit
     :return: Dataset instance (which is a list)
     """
@@ -300,61 +408,26 @@ def load_dataset(
 
     ignore_list = set(vocabulary.ignore) if apply_ignore_list else None
 
-    allowed_characters = set(vocabulary.characters) if vocabulary else None
+    allowed_characters = set(vocabulary.characters) if vocabulary and apply_ignore_list else None
 
-    num_skipped = 0
-    total_loaded = 0
+    filter = WordsFilter(
+        blacklist=blacklist, whitelist=whitelist,
+        ignore_list=ignore_list,
+        allowed_characters=allowed_characters,
+        max_word_len=max_word_len,
+        max_ds_items=max_ds_items
+    )
 
     with auto_voc.builder() as characters:
-        def on_sample(gt: GroundTruthPathsItem):
-            nonlocal num_skipped, total_loaded
-
-            total_loaded += 1
-
-            skip_msg = f"Skipping word '{gt.str_value}', rendered as '{gt.img_path}': %s"
-
-            if whitelist and gt.img_name not in whitelist:
-                LOG.debug(skip_msg % f"not in whitelist.")
-                num_skipped += 1
-                return False
-
-            if len(gt.str_value) > max_word_len:
-                LOG.debug(skip_msg % f"exceeds max length {max_word_len} characters.")
-                num_skipped += 1
-                return False
-
-            if ignore_list and gt.str_value in ignore_list:
-                LOG.debug(skip_msg % "is in ignore list")
-                num_skipped += 1
-                return False
-
-            if blacklist and gt.img_name in blacklist:
-                LOG.debug(skip_msg % "is in blacklist")
-                num_skipped += 1
-                return False
-
-            if allowed_characters and apply_ignore_list:
-                disallowed = set(gt.str_value).difference(allowed_characters)
-                if disallowed:
-                    LOG.debug(skip_msg % f"contains disallowed characters: {''.join(disallowed)}")
-                    num_skipped += 1
-                    return False
-
-            if os.path.getsize(gt.img_path) == 0:
-                LOG.debug(skip_msg % "image is empty")
-                num_skipped += 1
-                return False
-
-            characters.update(gt.str_value)
-            return True
-
-        if pathlib.Path(str_values_file_path).suffix == ".json":
-            ground_truth = load_ground_truth_json(str_values_file_path, on_sample, max_ds_items)
+        if gt_format == GTFormat.JSON:
+            ground_truth = load_ground_truth_json(gt_path, filter, max_ds_items)
             res = ground_truth_to_dataset(ground_truth), auto_voc
-        elif img_dir:
-            res = load_iam_dataset(str_values_file_path, img_dir, on_sample, max_ds_items), auto_voc
+        elif gt_format == GTFormat.IAM_ASCII:
+            res = load_iam_dataset(gt_path, img_dir, filter, max_ds_items), auto_voc
+        # elif gt_format == GTFormat.IAM_XML:
+        #     res = load_iam_xml(gt_path, img_dir, on_sample, max_ds_items), auto_voc
         else:
-            raise Error(f"Text file is in IAM format, but images directory is not provided")
+            raise Error(f"Ground truth is in wrong format.")
         pass
 
     if not res:
@@ -366,9 +439,9 @@ def load_dataset(
             if w not in loaded_items:
                 LOG.warning(f"Item '{w}' is in whitelist, but not loaded.")
 
-    LOG.info(f"Total samples checked: {total_loaded}")
+    LOG.info(f"Total samples checked: {filter.total_loaded}")
     LOG.info(f"Final dataset size: {len(res[0])}")
-    LOG.info(f"Total amount of skipped words: {num_skipped}")
+    LOG.info(f"Total amount of skipped words: {filter.num_skipped}")
     return res
 
 
@@ -609,22 +682,7 @@ def save_marked(state_path: str, state: MarkedState):
         json.dump(v, f, indent=4)
 
 
-def add_dataset_args(parser):
-    parser.add_argument(
-        "-text",
-        required=True,
-        help="ASCII file with lines or sentences description. Either IAM ascii format, or our JSON format.",
-    )
-    parser.add_argument(
-        "-img",
-        help="Root directory of IAM image lines or sentences files."
-             " Is required if file with lines given in IAM format.",
-    )
-    parser.add_argument(
-        "-max-ds-items",
-        type=int,
-        help="Maximum amount of loaded datasource items"
-    )
+def add_blacklist_args(parser: argparse.ArgumentParser):
     parser.add_argument(
         "-blacklist",
         help="File with blacklisted item names. Should be in format of 'ploti' state."
@@ -634,14 +692,9 @@ def add_dataset_args(parser):
         help="File with whitelist item names. Should be in format of 'ploti' state."
              " If specified, only items from whitelist are used."
     )
-    parser.add_argument(
-        "-no-ignore-list",
-        action="store_true",
-        help="Apply ignore list from vocabulary."
-    )
 
 
-def parse_dataset_args(args, vocabulary: Vocabulary):
+def parse_blacklist_args(args):
     blacklist = None
     whitelist = None
     if args.blacklist:
@@ -653,8 +706,72 @@ def parse_dataset_args(args, vocabulary: Vocabulary):
         whitelist = set(state.marked)
         LOG.info(f"Loaded whitelist with {len(whitelist)} items.")
 
+    return blacklist, whitelist
+
+
+def add_dataset_args(parser: argparse.ArgumentParser):
+    ground_truth_options = parser.add_mutually_exclusive_group(
+        required=True,
+    )
+    ground_truth_options.add_argument(
+        "-text",
+        help="DEPRECATED. ASCII file with lines or sentences description."
+             "Either IAM ascii format, or our JSON format.",
+    )
+    ground_truth_options.add_argument(
+        "-gt-iam-ascii",
+        help="ASCII file with lines, sentences or words ground truth in IAM format."
+    )
+    ground_truth_options.add_argument(
+        "-gt-iam-xml",
+        help="Root directory with IAM forms XML files, with ground truth description."
+    )
+    ground_truth_options.add_argument(
+        "-gt-json",
+        help="JSON file with ground truth description."
+    )
+
+    parser.add_argument(
+        "-img",
+        help="Root directory of IAM image forms, lines, sentences or word files."
+             " Is required if ground truth is given in one of IAM formats.",
+    )
+    parser.add_argument(
+        "-max-ds-items",
+        type=int,
+        help="Maximum amount of loaded datasource items"
+    )
+
+    add_blacklist_args(parser)
+
+    parser.add_argument(
+        "-no-ignore-list",
+        action="store_true",
+        help="Apply ignore list from vocabulary."
+    )
+
+
+def parse_dataset_args(args, vocabulary: Vocabulary):
+    blacklist, whitelist = parse_blacklist_args(args)
+
+    def _parse_gt_format(args) -> Tuple[Optional[GTFormat], Optional[str]]:
+        if args.gt_iam_ascii:
+            return GTFormat.IAM_ASCII, args.gt_iam_ascii
+        if args.gt_iam_xml:
+            return GTFormat.IAM_XML, args.gt_iam_xml
+        if args.gt_json:
+            return GTFormat.JSON, args.gt_json
+        if args.text:
+            if Path(args.text).suffix == ".json":
+                return GTFormat.JSON, args.text
+            return GTFormat.IAM_ASCII, args.text
+        return None, None
+
+    gt_format, gt_path = _parse_gt_format(args)
+
     return load_dataset(
-        str_values_file_path=args.text, img_dir=args.img,
+        gt_format=gt_format,
+        gt_path=gt_path, img_dir=args.img,
         vocabulary=vocabulary,
         apply_ignore_list=not args.no_ignore_list,
         blacklist=blacklist,

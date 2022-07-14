@@ -12,8 +12,9 @@ from tensorflow import keras
 
 from config import CACHE_DIR_DEFAULT, TRAIN_EPOCHS_DEFAULT, TRAIN_TEST_RATIO, TRAIN_VALIDATE_CNT, DATASET_SHUFFLER_SEED, \
     TENSORBOARD_LOGS_DEFAULT, BATCH_SIZE_DEFAULT
-from utils.dataset_utils import Dataset, tf_dataset, preprocess_dataset, parse_dataset_args, \
+from utils.dataset_utils import tf_dataset, preprocess_dataset, parse_dataset_args, \
     add_dataset_args, save_marked, MarkedState
+from utils.common import Dataset
 from utils.model_utils import build_model, EditDistanceCallback, ClearMemory, fit_manual
 from utils.plot_utils import tf_plot_predictions, plot_interactive
 from utils.text_utils import Vocabulary, add_voc_args, parse_voc_args

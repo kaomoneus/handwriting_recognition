@@ -2,8 +2,8 @@ import argparse
 from pathlib import Path
 
 from config import CACHE_DIR_DEFAULT
-from utils.dataset_utils import ROI, preprocess_dataset
-from utils.common import GroundTruthPathsItem
+from utils.dataset_utils import preprocess_dataset
+from utils.common import GroundTruthPathsItem, ROI
 from utils.plot_utils import plot_dataset
 
 

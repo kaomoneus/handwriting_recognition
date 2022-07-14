@@ -4,8 +4,8 @@ from pathlib import Path
 from keras.saving.save import load_model
 
 from config import CACHE_DIR_DEFAULT
-from utils.dataset_utils import ROI, preprocess_dataset, tf_dataset
-from utils.common import GroundTruthPathsItem
+from utils.dataset_utils import preprocess_dataset, tf_dataset
+from utils.common import GroundTruthPathsItem, ROI
 from utils.plot_utils import tf_plot_predictions
 from utils.text_utils import add_voc_args, parse_voc_args, Vocabulary
 

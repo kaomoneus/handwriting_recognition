@@ -117,5 +117,5 @@ def parse_voc_args(args: argparse.Namespace):
         LOG.info("Using default vocabulary")
         return Vocabulary(**VOCABULARY_DEFAULT)
 
-    LOG.info("Using vocabulary: " + args.voc)
-    return load_vocabulary(args.voc)
+    LOG.info("Using vocabulary: " + args.vocabulary)
+    return load_vocabulary(args.vocabulary)

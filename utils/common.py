@@ -1,8 +1,6 @@
 import dataclasses
 import itertools
-from typing import Optional, List, Dict
-
-from utils.dataset_utils import ROI
+from typing import Optional, List, Dict, Tuple
 
 
 @dataclasses.dataclass
@@ -12,11 +10,26 @@ class Rect:
     width: int
     height: int
 
+    def to_vec(self):
+        return self.x, self.y, self.width, self.height
+
+
+@dataclasses.dataclass
+class Point:
+    x: int
+    y: int
+
+    def to_vec(self):
+        return self.x, self.y
+
 
 @dataclasses.dataclass
 class GlyphItem:
     value: str
     box: Rect
+
+
+ROI = Tuple[int, int, int, int]
 
 
 @dataclasses.dataclass
@@ -59,41 +72,32 @@ class Word:
         for g in self.glyphs:
             g.x += x
 
-    def get_xy(self):
-        min_y = list(itertools.accumulate(
-            self.glyphs, lambda s, g: update_min(s, g.y),
-            initial=None
-        ))[-1]
-        return self.glyphs[0].x, min_y
+    def get_top(self):
+        return min(self.glyphs, key=lambda g: g.y).y
 
-    def get_width(self):
-        return list(itertools.accumulate(self.glyphs, lambda s, g: s + g.width))[-1]
+    def get_left(self):
+        return min(self.glyphs, key=lambda g: g.x).x
 
-    def get_height(self):
-        x, y = self.get_xy()
-        max_y = list(itertools.accumulate(
-            self.glyphs, lambda s, g: update_max(s, g.y),
-            initial=None
-        ))[-1]
-        return max_y - y
+    def get_right(self):
+        max_x_r = max(self.glyphs, key=lambda g: g.x + g.width)
+        return max_x_r.x + max_x_r.width
+
+    def get_bottom(self):
+        max_y_r = max(self.glyphs, key=lambda g: g.y + g.height)
+        return max_y_r.y + max_y_r.height
 
     def get_rect(self):
-        return Rect(*self.get_xy(), self.get_width(), self.get_height())
+        left, top, right, bottom = \
+            self.get_left(), self.get_top(), self.get_right(), self.get_bottom()
+
+        return Rect(left, top, right-left, bottom-top)
 
 
 @dataclasses.dataclass
 class Line:
     text: str
-    words: Dict[str, Word]
+    words: List[Word]
 
 
-def update_min(existing, candidate):
-    if existing is None:
-        return candidate
-    return min(existing, candidate)
-
-
-def update_max(existing, candidate):
-    if existing is None:
-        return candidate
-    return max(existing, candidate)
+Dataset = List[GroundTruthPathsItem]
+GroundTruth = Dict[str, GroundTruthPathsItem]
