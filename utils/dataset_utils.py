@@ -167,6 +167,7 @@ def make_lines_dataset(
 
     total_skipped_words = 0
     total_skipped_lines = 0
+    total_lines = 0
     for form_xml, form_img_path in tqdm(locs.items(), desc="Processing forms"):
         if not form_img_path.exists():
             continue
@@ -176,6 +177,7 @@ def make_lines_dataset(
         form_img = form_img.reshape(form_img.shape[:-1])
         lines: Dict[str, Line] = _get_lines(forms_xml_root / form_xml)
         for ln_id, ln in lines.items():
+            total_lines += 1
             num_skipped = 0
             first_skipped_before: Optional[Word] = None
             skipped_before: List[Word] = []
@@ -241,8 +243,11 @@ def make_lines_dataset(
             else:
                 total_skipped_lines += 1
 
-    LOG.info(f"    Total words skipped: {total_skipped_words}")
+    # It seems to duplicate message emitted by load_dataset
+    #    LOG.info(f"    Total words skipped: {total_skipped_words}")
+    LOG.info(f"    Total lines checked: {total_lines}")
     LOG.info(f"    Total lines skipped: {total_skipped_lines}")
+    LOG.info(f"    Total lines rendered: {total_lines - total_skipped_lines}")
 
     return res
 
