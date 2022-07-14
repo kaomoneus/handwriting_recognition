@@ -82,6 +82,13 @@ Default path to marked list
 """
 MARKED_PATH_DEFAULT = ".marked.json"
 
+
+"""
+Default path to whitelist (generated whenever dataset is loaded)
+"""
+WHITELIST_PATH_DEFAULT = ".last_whitelist.json"
+
+
 """
 Default path to tensorboard logs dir
 """

@@ -20,7 +20,7 @@ import tensorflow as tf
 from tensorflow.python.data import AUTOTUNE
 from tqdm import tqdm
 
-from config import BATCH_SIZE_DEFAULT, MAX_WORD_LEN_DEFAULT
+from config import BATCH_SIZE_DEFAULT, MAX_WORD_LEN_DEFAULT, WHITELIST_PATH_DEFAULT
 from errors import Error
 from utils.common import Rect, GroundTruthPathsItem, Word, Line, ROI, Dataset, GroundTruth, Point
 from utils.image_utils import tf_distortion_free_resize, augment_image, distortion_free_resize, \
@@ -682,6 +682,13 @@ def save_marked(state_path: str, state: MarkedState):
         json.dump(v, f, indent=4)
 
 
+def save_whitelist(dataset):
+    whitelisted = [gt.img_name for gt in dataset]
+    marked = MarkedState(marked=whitelisted)
+    LOG.info(f"Saving whitelist to {WHITELIST_PATH_DEFAULT}.")
+    save_marked(WHITELIST_PATH_DEFAULT, marked)
+
+
 def add_blacklist_args(parser: argparse.ArgumentParser):
     parser.add_argument(
         "-blacklist",
@@ -769,7 +776,7 @@ def parse_dataset_args(args, vocabulary: Vocabulary):
 
     gt_format, gt_path = _parse_gt_format(args)
 
-    return load_dataset(
+    dataset, voc = load_dataset(
         gt_format=gt_format,
         gt_path=gt_path, img_dir=args.img,
         vocabulary=vocabulary,
@@ -778,3 +785,6 @@ def parse_dataset_args(args, vocabulary: Vocabulary):
         whitelist=whitelist,
         max_ds_items=args.max_ds_items,
     )
+
+    save_whitelist(dataset)
+    return dataset, voc
