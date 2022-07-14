@@ -1,5 +1,5 @@
 {
-    "characters": "-'.,/0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
+    "characters": "\"-'.,/0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
     "max_len": 21,
     "ignore": [
         "#",

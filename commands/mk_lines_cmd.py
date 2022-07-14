@@ -9,7 +9,7 @@ from pathlib import Path
 from config import MAX_WORD_LEN_DEFAULT
 from utils.dataset_utils import add_blacklist_args, parse_blacklist_args, make_lines_dataset, WordsFilter, \
     save_ground_truth_json, \
-    dataset_to_ground_truth
+    dataset_to_ground_truth, GTFormat
 from utils.text_utils import add_voc_args, parse_voc_args
 
 LOG = logging.getLogger()
@@ -56,12 +56,17 @@ def handle(args: argparse.Namespace):
         lines_root=lines_root,
         forms_xml_root=Path(args.forms_xml_dir),
         forms_img_root=Path(args.image_dir),
-        filter=filter
+        filter=filter,
     )
     gt = dataset_to_ground_truth(ds)
 
     ground_truth_path = lines_root / "gt.json"
-    save_ground_truth_json(gt, ground_truth_path)
+    LOG.info("Saving ground truth.")
+    save_ground_truth_json(
+        gt, ground_truth_path,
+        gt_formats={GTFormat.JSON, GTFormat.TESSERACT}
+    )
 
-    LOG.info(f"Total samples checked: {filter.total_loaded}")
-    LOG.info(f"Total amount of skipped words: {filter.num_skipped}")
+    LOG.info("Done.")
+    LOG.info(f"    Total samples checked: {filter.total_loaded}")
+    LOG.info(f"    Total amount of skipped words: {filter.num_skipped}")

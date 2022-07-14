@@ -42,6 +42,7 @@ class GTFormat(Enum):
     IAM_ASCII = auto()
     IAM_XML = auto()
     JSON = auto()
+    TESSERACT = auto()
 
 
 def get_img_locs(img_dir: str) -> Dict[str, str]:
@@ -177,6 +178,7 @@ def make_lines_dataset(
         for ln_id, ln in lines.items():
             num_skipped = 0
             first_skipped_before: Optional[Word] = None
+            skipped_before: List[Word] = []
             strikeout_offset = 0
             str_value = []
             words_to_render: List[Tuple[Point, Rect]] = []
@@ -196,12 +198,22 @@ def make_lines_dataset(
                 if not passed:
                     if first_skipped_before is None:
                         first_skipped_before = word
+                    skipped_before.append(word)
                     total_skipped_words += 1
                     continue
 
                 elif first_skipped_before is not None:
-                    strikeout_offset += word.get_left() - first_skipped_before.get_left()
+                    # We do some trick to keep overlapping words at proper spacing
+                    # from one side,
+                    # and to keep non-overlapped spaces as well. The latter is implicitly
+                    # defined by differences between word boundaries.
+                    max_skipped_x = max(skipped_before, key=lambda w: w.get_right()).get_right()
+                    strikeout_offset += \
+                        min(max_skipped_x, word.get_left()) \
+                        - first_skipped_before.get_left()
+
                     first_skipped_before = None
+                    skipped_before = []
 
                 if words_to_render and word.text not in PUNCTUATIONS:
                     str_value.append(" ")
@@ -229,8 +241,8 @@ def make_lines_dataset(
             else:
                 total_skipped_lines += 1
 
-    LOG.debug(f"    Total words skipped: {total_skipped_words}")
-    LOG.debug(f"    Total lines skipped: {total_skipped_lines}")
+    LOG.info(f"    Total words skipped: {total_skipped_words}")
+    LOG.info(f"    Total lines skipped: {total_skipped_lines}")
 
     return res
 
@@ -267,13 +279,33 @@ def load_ground_truth_json(
             LOG.warning(f"Unable to decode '{path}': {e}")
 
 
-def save_ground_truth_json(ground_truth: Dict[str, GroundTruthPathsItem], path: Union[str, os.PathLike]):
-    with open(path, "w") as f:
-        d = {
-            img_path: dataclasses.asdict(gt)
-            for img_path, gt in ground_truth.items()
-        }
-        json.dump(d, f, indent=4)
+def save_ground_truth_json(
+    ground_truth: Dict[str, GroundTruthPathsItem],
+    path: Union[str, os.PathLike],
+    gt_formats: Set[GTFormat] = None
+):
+    supported_formats = {GTFormat.JSON, GTFormat.TESSERACT}
+
+    if not gt_formats:
+        gt_formats = {GTFormat.JSON}
+
+    if GTFormat.JSON in gt_formats:
+        with open(path, "w") as f:
+            d = {
+                img_path: dataclasses.asdict(gt)
+                for img_path, gt in ground_truth.items()
+            }
+            json.dump(d, f, indent=4)
+    if GTFormat.TESSERACT in gt_formats:
+        for img_path, gt in ground_truth.items():
+            gt_path = Path(img_path).with_suffix(".gt.txt")
+            with open(gt_path, "w") as f:
+                print(gt.str_value, file=f)
+
+    unsupported = gt_formats.difference(supported_formats)
+    if unsupported:
+        for gt_format in unsupported:
+            LOG.warning(f"Can not save ground truth in '{gt_format}'")
 
 
 def load_iam_dataset(
