@@ -186,8 +186,10 @@ class Renderer:
     def render(self, dest: Path, text: str, unique_prefix: str):
         res: Dataset = []
         for name, font in self._fonts.items():
+            img_name = f"{unique_prefix}-{name}"
             est = self._estimate_size(font, text)
             if est is None:
+                LOG.debug(f"Skipped '{img_name}' for text '{text}'")
                 continue
             left, top, right, bottom = est
             width = right + SYNTHETIC_MARGIN*2
@@ -200,8 +202,6 @@ class Renderer:
 
             draw_interface = ImageDraw.Draw(img)
             draw_interface.text((x, y), text, font=font, fill="Black")
-
-            img_name = f"{unique_prefix}-{name}"
 
             img_path = str(dest / f"{img_name}.png")
             gt_txt_path = str(dest / f"{img_name}.gt.txt")
