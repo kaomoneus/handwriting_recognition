@@ -75,6 +75,7 @@ def handle(args: argparse.Namespace):
     LOG.info(f"Complete.")
     LOG.info(f"    Total lines: {res.num_lines}")
     LOG.info(f"    Total words: {res.num_words}")
+    LOG.info(f"    Total ds items: {len(res.dataset)}")
 
 
 @dataclasses.dataclass
@@ -181,7 +182,6 @@ class FontInfo:
             self.supported_characters.add(symbol)
 
         return all_supported
-
 
 
 class Renderer:
