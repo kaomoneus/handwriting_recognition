@@ -10,7 +10,7 @@ import logging
 import os
 import random
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Set
 
 from PIL import ImageFont, ImageDraw, Image
 from PIL.ImageFont import FreeTypeFont
@@ -22,8 +22,8 @@ from utils.dataset_utils import dataset_to_ground_truth, save_ground_truth_json,
 from utils.os_utils import list_dir_recursive
 
 SYNTHETIC_FONT_SIZES = [15, 30, 60]
-
 SYNTHETIC_MARGIN = 2
+KNOWN_SPACE_LIKE_SYMBOLS = {' '}
 
 LOG = logging.getLogger()
 
@@ -127,7 +127,7 @@ def render_text(dest, fonts_dir, text_path, max_ds_items):
                         res.extend(render_res)
                     cur_line = []
                     cur_line_idx += 1
-                    if max_ds_items and cur_line_idx * num_items_per_render >= max_ds_items:
+                    if max_ds_items and len(res) >= max_ds_items:
                         LOG.info(f"Reached limit of {max_ds_items}.")
                         stop_rendering = True
                         break
@@ -147,6 +147,36 @@ def render_text(dest, fonts_dir, text_path, max_ds_items):
     )
 
 
+@dataclasses.dataclass()
+class FontInfo:
+    pillow_font: FreeTypeFont
+    supported_characters: Set[str] = dataclasses.field(default_factory=set)
+    unsupported_characters: Set[str] = dataclasses.field(default_factory=set)
+
+    def check_supported(self, text: str):
+        text = {symbol for symbol in text if symbol not in KNOWN_SPACE_LIKE_SYMBOLS}
+
+        if text.intersection(self.unsupported_characters):
+            return False
+
+        if len(text.difference(self.supported_characters)) == 0:
+            return True
+
+        all_supported = True
+
+        for symbol in text:
+            mask = self.pillow_font.getmask(symbol)
+            bbox = mask.getbbox()
+            if bbox is None:
+                self.unsupported_characters.add(symbol)
+                all_supported = False
+                continue
+            self.supported_characters.add(symbol)
+
+        return all_supported
+
+
+
 class Renderer:
     def __init__(self, fonts_dir: Path):
         available_font_paths: List[Path] = list_dir_recursive(
@@ -154,7 +184,7 @@ class Renderer:
             lambda f: f.suffix in {".ttf", ".otf"}
         )
 
-        self._fonts: Dict[str, FreeTypeFont] = dict()
+        self._fonts: Dict[str, FontInfo] = dict()
 
         for font_path in available_font_paths:
             family = font_path.stem
@@ -163,7 +193,9 @@ class Renderer:
                 try:
                     for font_size in SYNTHETIC_FONT_SIZES:
                         font = ImageFont.truetype(str(font_path), font_size, index=index)
-                        self._fonts[f"{family}-sz{font_size}-fc{index}"] = font
+                        self._fonts[f"{family}-sz{font_size}-fc{index}"] = FontInfo(
+                            pillow_font=font,
+                        )
                     index += 1
                 except IOError:
                     break
@@ -171,10 +203,14 @@ class Renderer:
                 LOG.warning(f"Unable to load font file: {font_path}")
 
     @staticmethod
-    def _estimate_size(font: FreeTypeFont, text: str):
-        ascent, descent = font.getmetrics()
+    def _estimate_size(font: FontInfo, text: str):
+        if not font.check_supported(text):
+            return None
 
-        mask = font.getmask(text)
+        pillow_font = font.pillow_font
+        ascent, descent = pillow_font.getmetrics()
+
+        mask = pillow_font.getmask(text)
 
         bbox = mask.getbbox()
         if bbox is None:
@@ -186,6 +222,7 @@ class Renderer:
     def render(self, dest: Path, text: str, unique_prefix: str):
         res: Dataset = []
         for name, font in self._fonts.items():
+            pillow_font = font.pillow_font
             img_name = f"{unique_prefix}-{name}"
             est = self._estimate_size(font, text)
             if est is None:
@@ -201,7 +238,7 @@ class Renderer:
             img = Image.new("RGB", (width, height), color="white")
 
             draw_interface = ImageDraw.Draw(img)
-            draw_interface.text((x, y), text, font=font, fill="Black")
+            draw_interface.text((x, y), text, font=pillow_font, fill="Black")
 
             img_path = str(dest / f"{img_name}.png")
             gt_txt_path = str(dest / f"{img_name}.gt.txt")
