@@ -91,13 +91,14 @@ def render_text(dest, fonts_dir, text_path, max_ds_items):
     if not text_path.exists() or text_path.is_dir():
         raise Error(f"File {text_path} doesn't exist or it is directory")
     renderer = Renderer(fonts_dir)
-    file_sz = int(os.stat(text_path).st_size / (1024 * 1024))
-    progress = tqdm(desc="Rendering", total=file_sz, unit="MB")
+    scale = 1024
+    file_sz = int(os.stat(text_path).st_size / scale)
+    progress = tqdm(desc="Rendering", total=file_sz, unit="Kb")
     total_words = 0
     line_size = next_line_size()
     cur_line = []
     cur_line_idx = 0
-    prev_cur_pos = 0
+    prev_upd_pos = 0
     num_items_per_render = renderer.num_items_per_render()
 
     dest_hash = str(hashlib.md5(str(dest).encode("utf-8")).hexdigest())
@@ -111,15 +112,19 @@ def render_text(dest, fonts_dir, text_path, max_ds_items):
             words = line.strip().split()
             for w in words:
                 cur_line.append(w)
+                total_words += 1
                 if len(cur_line) == line_size:
                     text = " ".join(cur_line)
-                    unique_prefix = f"{dest_hash[:5]}-{cur_pos:08x}-{len(text):04x}"
+                    unique_prefix = f"{dest_hash[:5]}-{total_words-len(cur_line):04x}-{len(cur_line):02x}"
                     render_res = renderer.render(
                         text=text,
                         dest=dest,
                         unique_prefix=unique_prefix,
                     )
-                    res.extend(render_res)
+                    if not render_res:
+                        LOG.warning(f"Unable to render text: '{text}'")
+                    else:
+                        res.extend(render_res)
                     cur_line = []
                     cur_line_idx += 1
                     if max_ds_items and cur_line_idx * num_items_per_render >= max_ds_items:
@@ -128,13 +133,11 @@ def render_text(dest, fonts_dir, text_path, max_ds_items):
                         break
                     line_size = next_line_size()
 
-            total_words += len(words)
-
             cur_pos = text_file.tell()
-            upd = int((cur_pos - prev_cur_pos)/(1024*1024))
+            upd = int((cur_pos - prev_upd_pos)/scale)
             if upd != 0:
                 progress.update(upd)
-                prev_cur_pos = cur_pos
+                prev_upd_pos = cur_pos
             line = text_file.readline()
 
     return _RenderResult(
@@ -173,14 +176,20 @@ class Renderer:
 
         mask = font.getmask(text)
 
-        left, top, right, bottom = mask.getbbox()
+        bbox = mask.getbbox()
+        if bbox is None:
+            return None
 
+        left, top, right, bottom = bbox
         return left, ascent - bottom, right, bottom + descent
 
     def render(self, dest: Path, text: str, unique_prefix: str):
         res: Dataset = []
         for name, font in self._fonts.items():
-            left, top, right, bottom = self._estimate_size(font, text)
+            est = self._estimate_size(font, text)
+            if est is None:
+                continue
+            left, top, right, bottom = est
             width = right + SYNTHETIC_MARGIN*2
             height = bottom + SYNTHETIC_MARGIN*2
 
