@@ -5,6 +5,7 @@ Exports dataset, currently only exports to tesseract format
 import argparse
 import dataclasses
 import datetime
+import hashlib
 import logging
 import os
 import random
@@ -99,7 +100,10 @@ def render_text(dest, fonts_dir, text_path, max_ds_items):
     prev_cur_pos = 0
     num_items_per_render = renderer.num_items_per_render()
 
+    dest_hash = str(hashlib.md5(str(dest).encode("utf-8")).hexdigest())
+
     stop_rendering = False
+    cur_pos = 0
 
     with open(text_path, "r") as text_file:
         line = text_file.readline()
@@ -108,10 +112,12 @@ def render_text(dest, fonts_dir, text_path, max_ds_items):
             for w in words:
                 cur_line.append(w)
                 if len(cur_line) == line_size:
+                    text = " ".join(cur_line)
+                    unique_prefix = f"{dest_hash[:5]}-{cur_pos:08x}-{len(text):04x}"
                     render_res = renderer.render(
-                        text=" ".join(cur_line),
+                        text=text,
                         dest=dest,
-                        line_idx=cur_line_idx,
+                        unique_prefix=unique_prefix,
                     )
                     res.extend(render_res)
                     cur_line = []
@@ -124,8 +130,8 @@ def render_text(dest, fonts_dir, text_path, max_ds_items):
 
             total_words += len(words)
 
-            cur_pos = text_file.tell() / (1024 * 1024)
-            upd = int(cur_pos - prev_cur_pos)
+            cur_pos = text_file.tell()
+            upd = int((cur_pos - prev_cur_pos)/(1024*1024))
             if upd != 0:
                 progress.update(upd)
                 prev_cur_pos = cur_pos
@@ -171,7 +177,7 @@ class Renderer:
 
         return left, ascent - bottom, right, bottom + descent
 
-    def render(self, dest: Path, text: str, line_idx: int):
+    def render(self, dest: Path, text: str, unique_prefix: str):
         res: Dataset = []
         for name, font in self._fonts.items():
             left, top, right, bottom = self._estimate_size(font, text)
@@ -186,7 +192,7 @@ class Renderer:
             draw_interface = ImageDraw.Draw(img)
             draw_interface.text((x, y), text, font=font, fill="Black")
 
-            img_name = f"{name}-ln{line_idx}"
+            img_name = f"{unique_prefix}-{name}"
 
             img_path = str(dest / f"{img_name}.png")
             gt_txt_path = str(dest / f"{img_name}.gt.txt")
