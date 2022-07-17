@@ -1,7 +1,7 @@
 import argparse
 import logging
 
-from commands import mk_lines_cmd
+from commands import mk_lines_cmd, synthetic_cmd
 from errors import Error
 from commands.eval_cmd import register_eval_cmd, handle_eval_cmd
 from commands.plot_cmd import handle_plot_cmd, register_plot_args
@@ -38,6 +38,12 @@ def main():
         )
         mk_lines_cmd.register(mk_lines_command)
 
+        synthetic_command = subparsers.add_parser(
+            "synthetic",
+            help="Generates synthetic dataset"
+        )
+        synthetic_cmd.register(synthetic_command)
+
         args = parser.parse_args()
 
         if args.cmd == "eval":
@@ -52,6 +58,8 @@ def main():
             handle_ploti_cmd(args)
         elif args.cmd == "mk-lines":
             mk_lines_cmd.handle(args)
+        elif args.cmd == "synthetic":
+            synthetic_cmd.handle(args)
 
         return 0
 
