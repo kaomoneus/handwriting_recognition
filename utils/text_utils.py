@@ -107,11 +107,20 @@ def add_voc_args(parser: argparse.ArgumentParser):
         help="Generates vocabulary from dataset",
         action="store_true"
     )
+    voc_group.add_argument(
+        "-no-voc",
+        dest="no_voc",
+        help="Voc is disabled, load None",
+        action="store_true"
+    )
 
 
 def parse_voc_args(args: argparse.Namespace):
     if args.voc_auto:
         LOG.info("Using auto vocabulary")
+        return None
+    if args.no_voc:
+        LOG.info("Vocabulary disabled")
         return None
     if not args.vocabulary:
         LOG.info("Using default vocabulary")

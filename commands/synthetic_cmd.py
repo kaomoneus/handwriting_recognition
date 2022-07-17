@@ -20,6 +20,7 @@ from errors import Error
 from utils.common import Dataset, GroundTruthPathsItem
 from utils.dataset_utils import dataset_to_ground_truth, save_ground_truth_json, load_ground_truth_json
 from utils.os_utils import list_dir_recursive
+from utils.text_utils import add_voc_args, parse_voc_args
 
 SYNTHETIC_FONT_SIZES = [15, 30, 60]
 SYNTHETIC_MARGIN = 2
@@ -49,6 +50,7 @@ def register(parser: argparse.ArgumentParser):
         type=int,
         help="Maximum amount of loaded datasource items"
     )
+    add_voc_args(parser)
 
 
 def next_line_size():
@@ -60,7 +62,8 @@ def handle(args: argparse.Namespace):
     text_path = Path(args.text)
     fonts_dir = Path(args.fonts_dir)
     max_ds_items = args.max_ds_items
-    res = render_text(dest, fonts_dir, text_path, max_ds_items)
+    vocabulary = parse_voc_args(args)
+    res = render_text(dest, fonts_dir, text_path, max_ds_items, vocabulary)
 
     gt_path = f"{dest / 'gt.json'}"
 
@@ -81,7 +84,7 @@ class _RenderResult:
     dataset: Dataset
 
 
-def render_text(dest, fonts_dir, text_path, max_ds_items):
+def render_text(dest, fonts_dir, text_path, max_ds_items, vocabulary):
 
     res: Dataset = []
 
@@ -109,7 +112,11 @@ def render_text(dest, fonts_dir, text_path, max_ds_items):
     with open(text_path, "r") as text_file:
         line = text_file.readline()
         while line and not stop_rendering:
-            words = line.strip().split()
+            words = [
+                w
+                for w in line.strip().split()
+                if vocabulary is None or not set(w).difference(vocabulary.characters)
+            ]
             for w in words:
                 cur_line.append(w)
                 total_words += 1
