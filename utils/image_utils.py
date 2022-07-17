@@ -223,24 +223,24 @@ def augment_image(src_img: np.ndarray, only_threshold: bool) -> Dict[str, np.nda
 
     threshold_value, thr_mid = cv2.threshold(src_img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
-    blured = cv2.GaussianBlur(thr_mid, (3, 3), sigmaX=1.)
-
     res["threshold"] = thr_mid
     if only_threshold:
         return res
 
+    blurred = cv2.GaussianBlur(thr_mid, (3, 3), sigmaX=1.)
+
     thr_val_left = int(threshold_value * 0.95)
     thr_val_right = int(threshold_value * 1.2)
 
-    _, thr_left = cv2.threshold(blured, thr_val_left, 255, cv2.THRESH_BINARY)
-    _, thr_right = cv2.threshold(blured, thr_val_right, 255, cv2.THRESH_BINARY)
+    _, thr_left = cv2.threshold(blurred, thr_val_left, 255, cv2.THRESH_BINARY)
+    _, thr_right = cv2.threshold(blurred, thr_val_right, 255, cv2.THRESH_BINARY)
     adaptive_threshold = cv2.adaptiveThreshold(
         src_img,
         255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 3
     )
 
     res.update({
-        "blured": blured,
+        "blurred": blurred,
         "adaptive_threshold": adaptive_threshold,
         "threshold_left": thr_left,
         "threshold_right": thr_right,
