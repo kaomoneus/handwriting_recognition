@@ -72,6 +72,7 @@ def make_lines_dataset(
     forms_xml_root: pathlib.Path,
     forms_img_root: pathlib.Path,
     filter: Callable[[GroundTruthPathsItem], bool] = None,
+    threshold: bool = False,
 ) -> Dataset:
     """
     Loads forms information (lines, words), and renders it into lines
@@ -79,7 +80,8 @@ def make_lines_dataset(
     :param lines_root: directory where rendered lines will be saved
     :param forms_xml_root: directory which holds form XML files
     :param forms_img_root: directory which holds form image files
-    :param blacklisted_words: set of blacklisted words
+    :param threshold: if set, then threshold will be applied to each word
+    :param filter: callback if provided should return False for words to skip
     :return: dataset with lines
     """
 
@@ -137,6 +139,9 @@ def make_lines_dataset(
 
             w_img = form_img[old_y: old_y + height, old_x: old_x + width]
 
+            if threshold:
+                w_img = augment_image(w_img, only_threshold=True)["threshold"]
+
             render_x = new_x - left
             render_y = new_y - top
 
@@ -145,10 +150,7 @@ def make_lines_dataset(
                 render_x: render_x + width,
             ]
 
-            if w_img.shape != dest.shape:
-                print(f"Dest image: {dest_img_path}")
-                print(f"crop shape: {w_img.shape}, dest shape: {dest.shape}")
-                assert False
+            assert w_img.shape == dest.shape
 
             res[
                 render_y: render_y + height,
@@ -593,7 +595,7 @@ def preprocess_dataset(
     :param only_threshold: don't create augmented images, only apply threshold
     :param cache_dir: cache directory where preprocessing results will be stored
     :param keep: use cached items instead of making new ones
-    :param full: also include blured and adaptive thresholded (and may be more)
+    :param full: also include blurred and adaptive thresholded (and may be more)
     :return: modified dataset with paths targeting to cache directory
     """
 
@@ -605,7 +607,7 @@ def preprocess_dataset(
         cache_dir=cache_dir,
         only_threshold=only_threshold,
         keep_existing_augmentations=keep,
-        ignore_augmentations={"blured", "adaptive_threshold"} if not full else None
+        ignore_augmentations={"blurred", "adaptive_threshold"} if not full else None
     ) for d in ds]
 
     def apply_preprocess_result(d, gts):

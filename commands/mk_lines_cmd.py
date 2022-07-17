@@ -33,6 +33,11 @@ def register(parser: argparse.ArgumentParser):
         type=int,
         help="Maximum amount of loaded datasource items"
     )
+    parser.add_argument(
+        "-threshold",
+        action="store_true",
+        help="Imply thresholding to each word before rendering"
+    )
     add_blacklist_args(parser)
     add_voc_args(parser)
 
@@ -57,6 +62,7 @@ def handle(args: argparse.Namespace):
         forms_xml_root=Path(args.forms_xml_dir),
         forms_img_root=Path(args.image_dir),
         filter=filter,
+        threshold=args.threshold,
     )
     gt = dataset_to_ground_truth(ds)
 
