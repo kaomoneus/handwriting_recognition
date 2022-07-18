@@ -379,37 +379,38 @@ class WordsFilter:
     def __call__(self, gt: GroundTruthPathsItem):
         self.total_loaded += 1
 
-        skip_msg = f"Skipping word '{gt.str_value}', rendered as '{gt.img_path}': %s"
+        def log_skip(reason: str):
+            LOG.debug(f"Skipping word '{gt.str_value}', rendered as '{gt.img_path}': {reason}")
 
         if self.whitelist and gt.img_name not in self.whitelist:
-            LOG.debug(skip_msg % f"not in whitelist.")
+            log_skip("not in whitelist.")
             self.num_skipped += 1
             return False
 
         if self.max_word_len and len(gt.str_value) > self.max_word_len:
-            LOG.debug(skip_msg % f"exceeds max length {self.max_word_len} characters.")
+            log_skip(f"exceeds max length {self.max_word_len} characters.")
             self.num_skipped += 1
             return False
 
         if self.ignore_list and gt.str_value in self.ignore_list:
-            LOG.debug(skip_msg % "is in ignore list")
+            log_skip("is in ignore list")
             self.num_skipped += 1
             return False
 
         if self.blacklist and gt.img_name in self.blacklist:
-            LOG.debug(skip_msg % "is in blacklist")
+            log_skip("is in blacklist")
             self.num_skipped += 1
             return False
 
         if self.allowed_characters:
             disallowed = set(gt.str_value).difference(self.allowed_characters)
             if disallowed:
-                LOG.debug(skip_msg % f"contains disallowed characters: {''.join(disallowed)}")
+                log_skip(f"contains disallowed characters: {''.join(disallowed)}")
                 self.num_skipped += 1
                 return False
 
-        if os.path.getsize(gt.img_path) == 0:
-            LOG.debug(skip_msg % "image is empty")
+        if not Path(gt.img_path).exists() or os.path.getsize(gt.img_path) == 0:
+            log_skip("image is empty or absent")
             self.num_skipped += 1
             return False
 
@@ -442,10 +443,10 @@ def load_dataset(
     :param max_ds_items: dataset size limit
     :return: Dataset instance (which is a list)
     """
-    max_word_len = vocabulary.max_len if vocabulary else MAX_WORD_LEN_DEFAULT
+    max_word_len = vocabulary.max_len if vocabulary else 0
     auto_voc = Vocabulary()
 
-    ignore_list = set(vocabulary.ignore) if apply_ignore_list else None
+    ignore_list = set(vocabulary.ignore) if vocabulary and apply_ignore_list else None
 
     allowed_characters = set(vocabulary.characters) if vocabulary and apply_ignore_list else None
 
@@ -797,7 +798,7 @@ def add_dataset_args(parser: argparse.ArgumentParser):
     )
 
 
-def parse_dataset_args(args, vocabulary: Vocabulary):
+def parse_dataset_args(args, vocabulary: Optional[Vocabulary]=None):
     blacklist, whitelist = parse_blacklist_args(args)
 
     def _parse_gt_format(args) -> Tuple[Optional[GTFormat], Optional[str]]:
