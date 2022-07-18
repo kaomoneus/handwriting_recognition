@@ -22,9 +22,12 @@ from utils.dataset_utils import dataset_to_ground_truth, save_ground_truth_json,
 from utils.os_utils import list_dir_recursive
 from utils.text_utils import add_voc_args, parse_voc_args
 
-SYNTHETIC_FONT_SIZES = [15, 30, 60]
+FONTS_PER_LINE = 3
+
+SYNTHETIC_FONT_SIZES = [23, 46, 69]
 SYNTHETIC_MARGIN = 2
 KNOWN_SPACE_LIKE_SYMBOLS = {' '}
+KNOWN_FONT_EXTENSIONS = {".ttf", ".ttc", ".otf"}
 
 LOG = logging.getLogger()
 
@@ -97,18 +100,19 @@ def render_text(dest, fonts_dir, text_path, max_ds_items, vocabulary):
     renderer = Renderer(fonts_dir)
     scale = 1024
     file_sz = int(os.stat(text_path).st_size / scale)
-    progress = tqdm(desc="Rendering", total=file_sz, unit="Kb")
+
+    progress = tqdm(desc="Rendering", total=file_sz, unit="Kb") if not max_ds_items else \
+        tqdm(desc="Rendering", total=max_ds_items)
+
     total_words = 0
     line_size = next_line_size()
     cur_line = []
     cur_line_idx = 0
     prev_upd_pos = 0
-    num_items_per_render = renderer.num_items_per_render()
 
     dest_hash = str(hashlib.md5(str(dest).encode("utf-8")).hexdigest())
 
     stop_rendering = False
-    cur_pos = 0
 
     with open(text_path, "r") as text_file:
         line = text_file.readline()
@@ -118,6 +122,7 @@ def render_text(dest, fonts_dir, text_path, max_ds_items, vocabulary):
                 for w in line.strip().split()
                 if vocabulary is None or not set(w).difference(vocabulary.characters)
             ]
+            items_per_orig_line = 0
             for w in words:
                 cur_line.append(w)
                 total_words += 1
@@ -133,6 +138,7 @@ def render_text(dest, fonts_dir, text_path, max_ds_items, vocabulary):
                         LOG.warning(f"Unable to render text: '{text}'")
                     else:
                         res.extend(render_res)
+                        items_per_orig_line += len(render_res)
                     cur_line = []
                     cur_line_idx += 1
                     if max_ds_items and len(res) >= max_ds_items:
@@ -141,11 +147,14 @@ def render_text(dest, fonts_dir, text_path, max_ds_items, vocabulary):
                         break
                     line_size = next_line_size()
 
-            cur_pos = text_file.tell()
-            upd = int((cur_pos - prev_upd_pos)/scale)
-            if upd != 0:
-                progress.update(upd)
-                prev_upd_pos = cur_pos
+            if not max_ds_items:
+                cur_pos = text_file.tell()
+                upd = int((cur_pos - prev_upd_pos)/scale)
+                if upd != 0:
+                    progress.update(upd)
+                    prev_upd_pos = cur_pos
+            else:
+                progress.update(items_per_orig_line)
             line = text_file.readline()
 
     return _RenderResult(
@@ -188,7 +197,7 @@ class Renderer:
     def __init__(self, fonts_dir: Path):
         available_font_paths: List[Path] = list_dir_recursive(
             fonts_dir,
-            lambda f: f.suffix in {".ttf", ".otf"}
+            lambda f: f.suffix in KNOWN_FONT_EXTENSIONS
         )
 
         self._fonts: Dict[str, FontInfo] = dict()
@@ -228,7 +237,11 @@ class Renderer:
 
     def render(self, dest: Path, text: str, unique_prefix: str):
         res: Dataset = []
-        for name, font in self._fonts.items():
+        # Pick random 3 fonts
+        random_items = list(self._fonts.items())
+        random.shuffle(random_items)
+
+        for name, font in random_items[:FONTS_PER_LINE]:
             pillow_font = font.pillow_font
             img_name = f"{unique_prefix}-{name}"
             est = self._estimate_size(font, text)
