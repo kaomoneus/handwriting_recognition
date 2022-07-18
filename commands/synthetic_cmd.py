@@ -203,7 +203,7 @@ class Renderer:
         self._fonts: Dict[str, FontInfo] = dict()
 
         for font_path in available_font_paths:
-            family = font_path.stem
+            family = font_path.stem.replace(" ", "_")
             index = 0
             while True:
                 try:
