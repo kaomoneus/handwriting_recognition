@@ -24,7 +24,7 @@ from config import BATCH_SIZE_DEFAULT, MAX_WORD_LEN_DEFAULT, WHITELIST_PATH_DEFA
 from errors import Error
 from utils.common import Rect, GroundTruthPathsItem, Word, Line, ROI, Dataset, GroundTruth, Point
 from utils.image_utils import tf_distortion_free_resize, augment_image, distortion_free_resize, \
-    magnie_humie, load_and_pad_image
+    magnie_humie, load_and_pad_image, AUGThresholdMode
 from utils.text_utils import Vocabulary
 
 PUNCTUATIONS = {",", ".", '?', "!", ":", ";"}
@@ -140,7 +140,7 @@ def make_lines_dataset(
             w_img = form_img[old_y: old_y + height, old_x: old_x + width]
 
             if threshold:
-                w_img = augment_image(w_img, only_threshold=True)["threshold"]
+                w_img = augment_image(w_img, AUGThresholdMode.ONLY_THRESHOLD)["threshold"]
 
             render_x = new_x - left
             render_y = new_y - top
@@ -490,11 +490,16 @@ def _preprocess_item(
     cache_dir: str,
     only_threshold: bool = False,
     keep_existing_augmentations: bool = False,
-    ignore_augmentations: Set[str] = None
+    ignore_augmentations: Set[str] = None,
+    resize=True,
+    threshold=True,
 ) -> Optional[Tuple[GroundTruthPathsItem, Dataset]]:
 
     img_path = src_item.img_path
     roi = src_item.roi
+    threshold_mode = AUGThresholdMode.ONLY_THRESHOLD if only_threshold else \
+        AUGThresholdMode.NO_THRESHOLD if not threshold else \
+        AUGThresholdMode.FULL
 
     cache_subdir = Path(cache_dir) / src_item.img_name
     ext = Path(img_path).suffix
@@ -531,7 +536,7 @@ def _preprocess_item(
         for aug_name, aug in augs_dict.items():
             aug_name = f"{src_item.img_name}-{aug_name}" if aug_name else src_item.img_name
             dest_path = cache_subdir / f"{aug_name}{ext}"
-            cv2.imwrite(str(dest_path), distortion_free_resize(aug))
+            cv2.imwrite(str(dest_path), distortion_free_resize(aug) if resize else aug)
             res.append(GroundTruthPathsItem(
                 str_value=src_item.str_value,
                 img_name=aug_name,
@@ -547,7 +552,8 @@ def _preprocess_item(
     cache_subdir.mkdir(parents=True, exist_ok=True)
 
     if only_threshold:
-        thresh = augment_image(image, only_threshold=True)["threshold"]
+        assert threshold, "Thresholding must be enabled"
+        thresh = augment_image(image, AUGThresholdMode.ONLY_THRESHOLD)["threshold"]
         res = save_augmentations({"": thresh})
         return src_item, res
 
@@ -560,7 +566,7 @@ def _preprocess_item(
     }
     augmentation = {}
     for prefix, pre_aug_image in pre_aug.items():
-        sub_aug = augment_image(pre_aug_image, only_threshold)
+        sub_aug = augment_image(pre_aug_image, threshold_mode)
 
         if not only_threshold and ignore_augmentations:
             for aug in ignore_augmentations:
@@ -589,6 +595,8 @@ def preprocess_dataset(
     cache_dir: str,
     keep: bool = False,
     full: bool = False,
+    resize: bool = True,
+    threshold: bool = True,
 ) -> Dataset:
     """
     Runs image preprocessing and augmentation
@@ -597,6 +605,8 @@ def preprocess_dataset(
     :param cache_dir: cache directory where preprocessing results will be stored
     :param keep: use cached items instead of making new ones
     :param full: also include blurred and adaptive thresholded (and may be more)
+    :param threshold: apply item thresholding. TODO: merge with only_threshold param
+    :param resize: resize item do default model input size
     :return: modified dataset with paths targeting to cache directory
     """
 
@@ -608,7 +618,9 @@ def preprocess_dataset(
         cache_dir=cache_dir,
         only_threshold=only_threshold,
         keep_existing_augmentations=keep,
-        ignore_augmentations={"blurred", "adaptive_threshold"} if not full else None
+        ignore_augmentations={"blurred", "adaptive_threshold"} if not full else None,
+        resize=resize,
+        threshold=threshold,
     ) for d in ds]
 
     def apply_preprocess_result(d, gts):
