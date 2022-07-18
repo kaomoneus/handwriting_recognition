@@ -21,6 +21,16 @@ def register(parser: argparse.ArgumentParser):
         action="store_true",
         help="Also include blurred and adaptive thresholded (and may be more)."
     )
+    parser.add_argument(
+        "-resize",
+        action="store_true",
+        help="Resize items to default NN input size."
+    )
+    parser.add_argument(
+        "-no-threshold",
+        action="store_true",
+        help="Don't threshold items, assume it's fine thresholded already."
+    )
     add_dataset_args(parser)
 
 
@@ -34,7 +44,9 @@ def handle(args: argparse.Namespace):
         ds, only_threshold=False,
         cache_dir=str(dest),
         keep=args.keep,
-        full=args.full
+        full=args.full,
+        resize=args.resize,
+        threshold=(not args.no_threshold)
     )
 
     gt_path = dest / "gt.json"

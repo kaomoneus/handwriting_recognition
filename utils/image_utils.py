@@ -1,4 +1,5 @@
 import logging
+from enum import Enum, auto
 from pathlib import Path
 from typing import Tuple, Optional, Dict, Callable, Set
 
@@ -212,7 +213,16 @@ def magnie_humie(src_img: np.ndarray):
     return magnie, humie
 
 
-def augment_image(src_img: np.ndarray, only_threshold: bool) -> Dict[str, np.ndarray]:
+class AUGThresholdMode(Enum):
+    NO_THRESHOLD = auto()
+    ONLY_THRESHOLD = auto()
+    FULL = auto()
+
+
+def augment_image(
+    src_img: np.ndarray,
+    threshold_mode: AUGThresholdMode,
+) -> Dict[str, np.ndarray]:
     """
     Augments image
     :param src_img: image to be augmented
@@ -224,7 +234,7 @@ def augment_image(src_img: np.ndarray, only_threshold: bool) -> Dict[str, np.nda
     threshold_value, thr_mid = cv2.threshold(src_img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
     res["threshold"] = thr_mid
-    if only_threshold:
+    if threshold_mode == AUGThresholdMode.ONLY_THRESHOLD:
         return res
 
     blurred = cv2.GaussianBlur(thr_mid, (3, 3), sigmaX=1.)
