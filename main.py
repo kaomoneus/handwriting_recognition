@@ -1,7 +1,7 @@
 import argparse
 import logging
 
-from commands import mk_lines_cmd, synthetic_cmd
+from commands import mk_lines_cmd, synthetic_cmd, preprocess_cmd
 from errors import Error
 from commands.eval_cmd import register_eval_cmd, handle_eval_cmd
 from commands.plot_cmd import handle_plot_cmd, register_plot_args
@@ -44,6 +44,12 @@ def main():
         )
         synthetic_cmd.register(synthetic_command)
 
+        preprocess_command = subparsers.add_parser(
+            "preprocess",
+            help="Runs dataset preprocessing"
+        )
+        preprocess_cmd.register(preprocess_command)
+
         args = parser.parse_args()
 
         if args.cmd == "eval":
@@ -60,7 +66,8 @@ def main():
             mk_lines_cmd.handle(args)
         elif args.cmd == "synthetic":
             synthetic_cmd.handle(args)
-
+        elif args.cmd == "preprocess":
+            preprocess_cmd.handle(args)
         return 0
 
     except Error as e:
