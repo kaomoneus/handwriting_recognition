@@ -493,6 +493,7 @@ def _preprocess_item(
     ignore_augmentations: Set[str] = None,
     resize=True,
     threshold=True,
+    subdir=True,
 ) -> Optional[Tuple[GroundTruthPathsItem, Dataset]]:
 
     img_path = src_item.img_path
@@ -501,7 +502,7 @@ def _preprocess_item(
         AUGThresholdMode.NO_THRESHOLD if not threshold else \
         AUGThresholdMode.FULL
 
-    cache_subdir = Path(cache_dir) / src_item.img_name
+    cache_subdir = Path(cache_dir) / src_item.img_name if subdir else Path(cache_dir)
     ext = Path(img_path).suffix
 
     if keep_existing_augmentations and cache_subdir.exists():
@@ -597,6 +598,8 @@ def preprocess_dataset(
     full: bool = False,
     resize: bool = True,
     threshold: bool = True,
+    subdir: bool = True,
+    jobs: int = 1,
 ) -> Dataset:
     """
     Runs image preprocessing and augmentation
@@ -607,6 +610,9 @@ def preprocess_dataset(
     :param full: also include blurred and adaptive thresholded (and may be more)
     :param threshold: apply item thresholding. TODO: merge with only_threshold param
     :param resize: resize item do default model input size
+    :param subdir: Put each set of preprocessed items into subdir"
+        which is named after original item.
+    :param jobs: Amount of parallel jobs.
     :return: modified dataset with paths targeting to cache directory
     """
 
@@ -621,6 +627,7 @@ def preprocess_dataset(
         ignore_augmentations={"blurred", "adaptive_threshold"} if not full else None,
         resize=resize,
         threshold=threshold,
+        subdir=subdir,
     ) for d in ds]
 
     def apply_preprocess_result(d, gts):
@@ -628,9 +635,9 @@ def preprocess_dataset(
             res.append(d)
         res.extend(gts)
 
-    if len(ds) > 20000:
+    if jobs > 1:
         LOG.info("Launching DS preprocessing pool...")
-        pool = Pool(processes=(os.cpu_count() * 4))
+        pool = Pool(processes=jobs)
 
         for d, gts in tqdm(
             pool.imap_unordered(_preprocess_item_task, preprocess_args),

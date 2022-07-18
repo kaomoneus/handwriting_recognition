@@ -31,6 +31,19 @@ def register(parser: argparse.ArgumentParser):
         action="store_true",
         help="Don't threshold items, assume it's fine thresholded already."
     )
+    parser.add_argument(
+        "-subdir",
+        action="store_true",
+        help="Put each set of preprocessed items into subdir"
+             " which is named after original item."
+    )
+    parser.add_argument(
+        "-j",
+        type=int,
+        dest="jobs",
+        default=1,
+        help="Number of parallel jobs"
+    )
     add_dataset_args(parser)
 
 
@@ -46,7 +59,9 @@ def handle(args: argparse.Namespace):
         keep=args.keep,
         full=args.full,
         resize=args.resize,
-        threshold=(not args.no_threshold)
+        threshold=(not args.no_threshold),
+        subdir=args.subdir,
+        jobs=args.jobs,
     )
 
     gt_path = dest / "gt.json"
