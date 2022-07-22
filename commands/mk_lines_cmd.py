@@ -25,6 +25,11 @@ def register(parser: argparse.ArgumentParser):
         help="Directory with forms XML files given in IAM format."
     )
     parser.add_argument(
+        "-use-page-xml",
+        action="store_true",
+        help="Use PAGE-XML format instead of IAM XML"
+    )
+    parser.add_argument(
         "-image-dir",
         help="Directory with forms XML files given in IAM format."
     )
@@ -61,6 +66,7 @@ def handle(args: argparse.Namespace):
         lines_root=lines_root,
         forms_xml_root=Path(args.forms_xml_dir),
         forms_img_root=Path(args.image_dir),
+        page_xml=args.use_page_xml,
         filter=filter,
         threshold=args.threshold,
     )

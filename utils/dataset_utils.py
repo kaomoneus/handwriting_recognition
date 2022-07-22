@@ -41,6 +41,7 @@ LOG = logging.getLogger(__name__)
 class GTFormat(Enum):
     IAM_ASCII = auto()
     IAM_XML = auto()
+    PAGE_XML = auto()
     JSON = auto()
     TESSERACT = auto()
 
@@ -71,6 +72,7 @@ def make_lines_dataset(
     lines_root: pathlib.Path,
     forms_xml_root: pathlib.Path,
     forms_img_root: pathlib.Path,
+    page_xml: bool,
     filter: Callable[[GroundTruthPathsItem], bool] = None,
     threshold: bool = False,
 ) -> Dataset:
@@ -81,9 +83,59 @@ def make_lines_dataset(
     :param forms_xml_root: directory which holds form XML files
     :param forms_img_root: directory which holds form image files
     :param threshold: if set, then threshold will be applied to each word
+    :param page_xml: use PAGE-XML instead of IAM XML
     :param filter: callback if provided should return False for words to skip
     :return: dataset with lines
     """
+
+    def _get_page_xml_word_text(w_node):
+        text_equiv = w_node.getElementsByTagName("TextEquiv").item(0)
+        unicode_node = text_equiv.getElementsByTagName("Unicode").item(0)
+        return unicode_node.firstChild.data
+
+    def _get_page_xml_line_id(form_name, line_idx):
+        return f"{form_name}-line_{line_idx}"
+
+    def _get_page_xml_word_id(form_name, line_idx, word_idx):
+        return f"{form_name}-line_{line_idx}-word_{word_idx}"
+
+    def _get_lines_page_xml(form_path: pathlib.Path):
+        dom: Document = xml.dom.minidom.parse(str(form_path))
+        pc_gts_node = dom.getElementsByTagName("PcGts").item(0)
+        page = pc_gts_node.getElementsByTagName("Page").item(0)
+        words = page.getElementsByTagName("Word")
+        form_name = form_path.stem
+
+        lines = dict()
+        cur_line = []
+        prev_word_left = -1
+        for w_dom in words:
+            coords_node = w_dom.getElementsByTagName("Coords").item(0)
+            points = coords_node.getAttribute("points").strip().split(" ")
+            lt, rt, rb, lb = tuple([
+                tuple(map(int, pt.split(",")))
+                for pt in points
+            ])
+            left, top = lt
+            right, bottom = rb
+
+            def _mk_word(word_idx):
+                return Word(
+                    word_id=_get_page_xml_word_id(form_name, len(lines), word_idx),
+                    text=_get_page_xml_word_text(w_dom),
+                    glyphs=[Rect(left, top, right-left, bottom-top)]
+                )
+
+            if prev_word_left < right:
+                cur_line.append(_mk_word(len(cur_line)))
+            else:
+                lines[_get_page_xml_line_id(form_name, len(lines))] = Line(
+                    text=" ".join(map(lambda lnw: lnw.text, cur_line)),
+                    words=cur_line
+                )
+                cur_line = [_mk_word(0)]
+            prev_word_left, _ = lt
+        return lines
 
     def _get_words(line_node: xml.dom.Node) -> List[Word]:
         words = [
@@ -161,15 +213,18 @@ def make_lines_dataset(
 
     res: Dataset = []
 
+    image_extension = ".png" if not page_xml else ".jpg"
+
     dir_items: List[pathlib.Path] = list(map(pathlib.Path, listdir(forms_xml_root)))
     locs = {
-        pathlib.Path(item): (forms_img_root / item.name).with_suffix(".png")
-        for item in dir_items
+        pathlib.Path(item): (forms_img_root / item.with_suffix(image_extension))
+        for item in dir_items if item.suffix == ".xml"
     }
 
     total_skipped_words = 0
     total_skipped_lines = 0
     total_lines = 0
+
     for form_xml, form_img_path in tqdm(locs.items(), desc="Processing forms"):
         if not form_img_path.exists():
             continue
@@ -177,7 +232,8 @@ def make_lines_dataset(
         if form_img is None:
             continue
         form_img = form_img.reshape(form_img.shape[:-1])
-        lines: Dict[str, Line] = _get_lines(forms_xml_root / form_xml)
+        lines: Dict[str, Line] = _get_lines(forms_xml_root / form_xml) if not page_xml \
+            else _get_lines_page_xml(forms_xml_root / form_xml)
         for ln_id, ln in lines.items():
             total_lines += 1
             num_skipped = 0
@@ -230,7 +286,7 @@ def make_lines_dataset(
 
             if words_to_render:
                 str_value = "".join(str_value)
-                line_img_path = (lines_root / ln_id).with_suffix(".png")
+                line_img_path = (lines_root / ln_id).with_suffix(image_extension)
                 _render_rois(line_img_path, form_img, words_to_render)
 
                 LOG.debug(f"Adding:")
@@ -304,7 +360,7 @@ def save_ground_truth_json(
             }
             json.dump(d, f, indent=4)
     if GTFormat.TESSERACT in gt_formats:
-        for img_path, gt in ground_truth.items():
+        for img_path, gt in tqdm(ground_truth.items(), desc="Saving tesseract .gt.txt"):
             gt_path = Path(img_path).with_suffix(".gt.txt")
             with open(gt_path, "w") as f:
                 print(gt.str_value, file=f)
@@ -793,6 +849,10 @@ def add_dataset_args(parser: argparse.ArgumentParser):
         help="Root directory with IAM forms XML files, with ground truth description."
     )
     ground_truth_options.add_argument(
+        "-gt-page-xml",
+        help="PAGE-XML file with ground truth description."
+    )
+    ground_truth_options.add_argument(
         "-gt-json",
         help="JSON file with ground truth description."
     )
@@ -825,6 +885,8 @@ def parse_dataset_args(args, vocabulary: Optional[Vocabulary]=None):
             return GTFormat.IAM_ASCII, args.gt_iam_ascii
         if args.gt_iam_xml:
             return GTFormat.IAM_XML, args.gt_iam_xml
+        if args.gt_page_xml:
+            return GTFormat.PAGE_XML, args.gt_page_xml
         if args.gt_json:
             return GTFormat.JSON, args.gt_json
         if args.text:
